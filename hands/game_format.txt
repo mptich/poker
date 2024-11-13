@@ -1,0 +1,22 @@
+Each game is recorded as 1 line in a CSV file.
+
+Fields:
+1. Date
+2. Room (PockerStars)
+3. Game number
+4. Game type (Hold'em No Limit)
+5. Currency (USD)
+6. SM/BB pays
+7. Comma separated active players
+8. Comma separated amounts in chips for each player
+9. Small blind name
+10. Hole cards: Comma separated moves 
+11. Flop
+12. Flop moves
+13. Turn
+14. Turn moves
+15. River
+16. River moves
+17. Shown cards
+18. Pot and rake
+19. Players and their gains (losses)
