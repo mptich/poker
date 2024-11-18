@@ -3,10 +3,10 @@ from datetime import datetime
 import pytz
 
 class GameState(Enum):
- Preflop=1
- Flop=2
- Turn=3
- River=4
+ Preflop=0
+ Flop=1
+ Turn=2
+ River=3
 
 FirstLine = re.compile(r"PokerStars Hand \#(\d+): +Hold'em No Limit \((.+)\).*\[(\d{4}\/\d{2}\/\d{2} \d{2}\:\d{2}\:\d{2}) ([A-Z]+)\].*")
 
@@ -18,9 +18,10 @@ TimeZoneDict = {"ET": "US/Eastern"}
 SecondLine = re.compile(r"Table .* Seat \#(\d+) is the button")
 
 # Lines that should be skipped
-SittingOutLine = re.compile(r".+is sitting out")
-SitsOutLine = re.compile(r".+sits out")
-JoinsTheTableLine = re.compile(r".+ joins the table at seat \#\d+")
+SittingOutLine = re.compile(r"(.+) is sitting out")
+SitsOutLine = re.compile(r"(.+) sits out")
+JoinsTheTableLine = re.compile(r"(.+) joins the table at seat \#\d+")
+LeavesTheTableLine = re.compile(r"(.+) leaves the table")
 
 PlayerLine = re.compile(r"Seat (\d+): (.+) \(.+([\d.]+) in chips\)")
 
@@ -35,20 +36,33 @@ RiverLine = re.compile(r"\*\*\* RIVER \*\*\* [(.{2}) (.{2}) (.{2}) (.{2})\] \[(.
 SummaryLine = re.compile(r"*** SUMMARY ***")
 
 
-
+# See game_record_attrib_desc.txt for attribute description
 class GameRecord:
  WasteLines = [SittingOutLine, StisOutLine]
+
 
  def ParsingErr(self):
   return f"Failed parsing line {self.ln + self.ln_offset}"
 
- def SkipWaist(self, waste_strings: list):
+
+ def SkipWaist(self, waste_lines: list):
+  # Each element in waste_lines coulf be a line, or a tuple of a line and
+  # processing function
+
   while True:
    if self.ln >= len(self.lines):
     return
    skip = False
    for l in waste_lines:
-    if l.match(self.lines[self.ln]) is not None:
+    if isinatance(l, tuple):
+     func = l[1]
+     l = l[0]
+    else:
+     func = None
+    m = l.match(self.lines[self.ln])
+    if m is not None:
+     if func:
+      func(m)
      skip = True
      break
    if not skip:
@@ -69,7 +83,7 @@ class GameRecord:
   self.ln = 2
   while self.MatchPlayerLine():
    self.ln += 1
-  self.ArrangePlayers()
+  self.ProcessPlayers()
 
   self.MatchSmallBlindLine()
 
@@ -78,6 +92,9 @@ class GameRecord:
 
   self.ln += 1
   self.MatchHoleCardsLine()
+
+  #JUSTATEMP
+  return
 
   self.ln += 1
   while self.MatchMoveLine():
@@ -121,11 +138,17 @@ class GameRecord:
     self.AssertEqualBets()
 
   
-  def MatchMoveLine(self):
+ def MatchMoveLine(self):
+  self.SkipWaste([(JoinsTheTableLine, self.ProcessJoinLeaveTable),
+   (LeavesTheTableLine, self.ProcessJoinLeaveTable)])
    
 
+ def AssertEqualBets(self):
+  assert len(self.players_pos) >= 2, self.ParsingErr()
+  active_bet = self.bet[self.players[self.players_pos[0]]]
+  for pos in self.players_pos[1:]:
+   assert self.bet[self.players[pos]] == active_bet, self.ParsingErr()
    
-
 
  def MatchFirstLine(self):
   m = FirstLine.match(self.lines[self.ln])
@@ -140,12 +163,14 @@ class GameRecord:
   assert m.group(4) in TimeZoneDict, self.ParsingErr()
   self.GenerateUtcTimestamp(m.group(3), TimeZoneDict[m.group(4)])
 
- def ParseSecondLine(self):
+
+ def MatchSecondLine(self):
   m = SecondLine.match(self.lines[self.ln])
   assert m is not None, self.ParsingErr()
   self.button = int(m.group(1))
 
- def ParsePlayerLine(self):
+
+ def MatchPlayerLine(self):
   self.SkipWaste([SittingOutLine])
   m = PlayerLine.match(self.lines[self.ln])
   if m is None:
@@ -156,7 +181,7 @@ class GameRecord:
   return True
 
 
- def ArrangePlayers(self):
+ def ProcessPlayers(self):
   assert len(self.parsed_players_info) >= 2, self.ParsingErr()
   assert len(self.parsed_players_info) <= 20, self.ParsingErr()
   assert self.button in self.parsed_players_info, self.ParsingErr()
@@ -236,7 +261,12 @@ class GameRecord:
   tz = pytz.timezone(tzstr)
   dt = datetime.strptime(tstr, "%Y/%m/%d %H:%M:%S").replace(tzinfo=tz)
   self.timestamp = dt.astimezone(pytz.utc)
-  
+
+
+ def ProcessJoinLeaveTable(self, m):
+  assert m.group(1) not in self.players, self.ParsingErr()
+
+
 print('here')
 a=GameRecord(["PokerStars Hand #253306280353:  Hold'em No Limit ($0.50/$1.00 USD) - 2024/11/08 4:37:04 WET [2024/11/07 23:37:04 ET]"], 100)
   
