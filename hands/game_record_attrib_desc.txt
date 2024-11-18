@@ -1,0 +1,19 @@
+
+ 
+ bb_fee (float) - BB amount
+ button (int) - seat of the button
+ communal (list) - list of the currently available communal cards
+ currency (str) - currensy used in the game
+ hand_number (int) - number of the game, follows "#" in the first game line
+ in_chips (dict) - player name -> amount in chips
+ in_progress (bool) - betting is in progress
+ lines (list) - list of lines for this game from a game file
+ ln (int) - current line number in 'lines'
+ ln_offset (int) - position of the first line in 'lines' in the game file
+ parsed_players_info (dict) - temporary attribute. A dictionary of player's seat-> (player name, money in chips)
+ players (list) - names of players in the order, first element is a SB
+ players_pos (list) - positions of the remaining players (0 position is an SB)
+ sb_fee (float) - SB amount
+ seat (dict) - player name -> seat number
+ state (GameState enum) - state of the betting process
+ timestamp (datetime) - date and time of the game in UTC

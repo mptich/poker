@@ -65,7 +65,7 @@ class GameRecord:
   self.ln = 1
   self.MatchSecondLine()
 
-  self.players = {}
+  self.parsed_players_info = {}
   self.ln = 2
   while self.MatchPlayerLine():
    self.ln += 1
@@ -120,7 +120,9 @@ class GameRecord:
    else:
     self.AssertEqualBets()
 
-
+  
+  def MatchMoveLine(self):
+   
 
    
 
@@ -149,48 +151,52 @@ class GameRecord:
   if m is None:
    return False
   seat = int(m.group(1))
-  assert seat not in self.players, self.ParsingErr()
-  self.players[seat] = (m.group(2), round(float(m.group(3), 2)))
+  assert seat not in self.parsed_players_info, self.ParsingErr()
+  self.parsed_players_info[seat] = (m.group(2), round(float(m.group(3), 2)))
   return True
 
+
  def ArrangePlayers(self):
-  assert len(self.players) >= 2, self.ParsingErr()
-  assert len(self.players) <= 20, self.ParsingErr()
-  assert self.button in self.players, self.ParsingErr()
-  seats = sorted(list(self.players.keys()))
+  assert len(self.parsed_players_info) >= 2, self.ParsingErr()
+  assert len(self.parsed_players_info) <= 20, self.ParsingErr()
+  assert self.button in self.parsed_players_info, self.ParsingErr()
+  seats = sorted(list(self.parsed_players_info.keys()))
   bindx = seats.indexof(button)
 
-  self.names = []
+  self.players = []
   self.in_chips = {}
   self.seat = {}
   indx = bindx + 1
   while True:
    if indx >= len(seats):
     indx = 0
-   tup = self.players[seats[indx]]
+   tup = self.parsed_players_info[seats[indx]]
    name = tup[0]
-   self.names.append(name)
+   self.players.append(name)
    self.in_chips[name] = tup[1] 
    self.seat[name] = seats[indx]
    if indx == bindx:
     break
    indx += 1
    
-  self.players = None
+  del self.parsed_players_info
+
 
  def MatchSmallBlindLine(self):
   self.SkipWaste([SitsOutLine])
   m = SmallBlindLine.match(self.lines[self.ln])
   assert m is not None, self.ParsingErr()
-  assert self.names[0] == m.group(1), self.ParsingErr()
+  assert self.players[0] == m.group(1), self.ParsingErr()
   assert self.sb_fee == float(m.group(2))
+
 
  def MatchBigBlindLine(self):
   self.SkipWaste([SitsOutLine])
   m = BigBlindLine.match(self.lines[self.ln])
   assert m is not None, self.ParsingErr()
-  assert self.names[1] == m.group(1), self.ParsingErr()
+  assert self.players[1] == m.group(1), self.ParsingErr()
   assert self.bb_fee == float(m.group(2))
+
 
  def MatchHoleCardsLine(self):
   self.SkipWaste([SitsOutLine])
@@ -199,11 +205,13 @@ class GameRecord:
   self.state = GameState.Preflop
   self.in_progress = True
 
+
  def MatchFlopLine(self):
   m = FlopLine.match(self.lines[self.ln])
   assert m is not None, self.ParsingErr()
   self.communal = [m.group(1), m.group(2), m.group(3)]
   self.state = GameState.Flop
+
 
  def MatchTurnLine(self):
   m = TurnLine.match(self.lines[self.ln])
@@ -213,6 +221,7 @@ class GameRecord:
   self.communal += [m.group(4)]
   self.state = GameState.Turn
 
+
  def MatchRiverLine(self):
   m = RiverLine.match(self.lines[self.ln])
   assert m is not None, self.ParsingErr()
@@ -221,9 +230,6 @@ class GameRecord:
    self.ParsingErr()
   self.communal += [m.group(5)]
   self.state = GameState.River
-
-
-
 
 
  def GenerateUtcTimestamp(self, tstr, tzstr):
