@@ -16,7 +16,16 @@ SitsOutLine = re.compile(r".+sits out")
 
 PlayerLine = re.compile(r"Seat (\d+): (.+) \(.+([\d.]+) in chips\)")
 
-SmallBlindLine = re.compile(r"(.+)\: 
+SmallBlindLine = re.compile(r"(.+)\: posts small blind (.+)")
+SmallBlindLine = re.compile(r"(.+)\: posts big blind (.+)")
+
+HoleCardsLine = re.compile(r"\*\*\* HOLE CARDS \*\*\*")
+FlopLine = re.compile(r"\*\*\* FLOP \*\*\* \[(.{2}) (.{2}) (.{2})\]")
+TurnLine = re.compile(r"\*\*\* TURN \*\*\* [(.{2}) (.{2}) (.{2})\] \[(.{2})\]")
+RiverLine = re.compile(r"\*\*\* RIVER \*\*\* [(.{2}) (.{2}) (.{2}) (.{2})\] \[(.{2})\]")
+
+SummaryLine = re.compile(r"*** SUMMARY ***")
+
 
 
 class GameRecord:
@@ -25,12 +34,12 @@ class GameRecord:
  def ParsingErr(self):
   return f"Failed parsing line {self.ln + self.ln_offset}"
 
- def SkipWaist(self):
+ def SkipWaist(self, waste_strings: list):
   while True:
    if self.ln >= len(self.lines):
     return
    skip = False
-   for l in self.WasteLines:
+   for l in waste_lines:
     if l.match(self.lines[self.ln]) is not None:
      skip = True
      break
@@ -59,6 +68,9 @@ class GameRecord:
   self.ln += 1
   self.MatchBigBlindLine()
 
+  self.ln += 1
+  self.MatchHoleCardsLine()
+
 
  def MatchFirstLine(self):
   m = FirstLine.match(self.lines[self.ln])
@@ -79,7 +91,7 @@ class GameRecord:
   self.button = int(m.group(1))
 
  def ParsePlayerLine(self):
-  self.SkipWaste()
+  self.SkipWaste([SittingOutLine])
   m = PlayerLine.match(self.lines[self.ln])
   if m is None:
    return False
@@ -113,9 +125,25 @@ class GameRecord:
    
   self.players = None
 
- def self.MatchSmallBlindLine(self):
-  self.SkipWaste()
-  prodolzhit'
+ def MatchSmallBlindLine(self):
+  self.SkipWaste([SitsOutLine])
+  m = SmallBlindLine.match(self.lines[self.ln])
+  assert m is not None, self.ParsingErr()
+  assert self.names[0] == m.group(1), self.ParsingErr()
+  assert self.sb_fee == float(m.group(2))
+
+ def MatchBigBlindLine(self):
+  self.SkipWaste([SitsOutLine])
+  m = BigBlindLine.match(self.lines[self.ln])
+  assert m is not None, self.ParsingErr()
+  assert self.names[1] == m.group(1), self.ParsingErr()
+  assert self.bb_fee == float(m.group(2))
+
+ def MatchHoleCardsLine(self):
+  self.SkipWaste([SitsOutLine])
+  m = HoleCardsLine.match(self.lines[self.ln])
+  assert m is not None, self.ParsingErr()
+
 
  def GenerateUtcTimestamp(self, tstr, tzstr):
   tz = pytz.timezone(tzstr)

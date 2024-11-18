@@ -6,17 +6,14 @@ Fields:
 3. Game number
 4. Game type (Hold'em No Limit)
 5. Currency (USD)
-6. SM/BB pays
-7. Comma separated active players
-8. Comma separated amounts in chips for each player
-9. Small blind name
-10. Hole cards: Comma separated moves 
-11. Flop
-12. Flop moves
-13. Turn
-14. Turn moves
-15. River
-16. River moves
-17. Shown cards
-18. Pot and rake
-19. Players and their gains (losses)
+6. SM/BB 
+7. Slash separated active players, starting with Small Blind
+8. Slash separated amounts in chips for each player
+9. Slash separated communal cards (up to 5)
+10. Slash separated moves, preflop
+11. Flop moves
+12. Turn moves
+13. River moves
+14. Shown cards
+15. Pot / rake
+16. Players and their gains (losses)
