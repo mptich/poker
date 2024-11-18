@@ -2,6 +2,12 @@ import re
 from datetime import datetime
 import pytz
 
+class GameState(Enum):
+ Preflop=1
+ Flop=2
+ Turn=3
+ River=4
+
 FirstLine = re.compile(r"PokerStars Hand \#(\d+): +Hold'em No Limit \((.+)\).*\[(\d{4}\/\d{2}\/\d{2} \d{2}\:\d{2}\:\d{2}) ([A-Z]+)\].*")
 
 SBBBDict = {"$0.50/$1.00 USD": ("USD", 0.5, 1.),
@@ -11,8 +17,10 @@ TimeZoneDict = {"ET": "US/Eastern"}
 
 SecondLine = re.compile(r"Table .* Seat \#(\d+) is the button")
 
+# Lines that should be skipped
 SittingOutLine = re.compile(r".+is sitting out")
 SitsOutLine = re.compile(r".+sits out")
+JoinsTheTableLine = re.compile(r".+ joins the table at seat \#\d+")
 
 PlayerLine = re.compile(r"Seat (\d+): (.+) \(.+([\d.]+) in chips\)")
 
@@ -59,7 +67,7 @@ class GameRecord:
 
   self.players = {}
   self.ln = 2
-  while(self.MatchPlayerLine()):
+  while self.MatchPlayerLine():
    self.ln += 1
   self.ArrangePlayers()
 
@@ -70,6 +78,51 @@ class GameRecord:
 
   self.ln += 1
   self.MatchHoleCardsLine()
+
+  self.ln += 1
+  while self.MatchMoveLine():
+   self.ln += 1
+  if len(self.players_pos) == 1:
+   self.in_progress = False
+  else:
+   self.AssertEqualBets()
+
+  self.ln += 1
+
+  if self.in_progress:
+   self.MatchFlopLine()
+   while self.MatchMoveLine():
+    self.ln += 1
+   if len(self.players_pos) == 1:
+    self.in_progress = False
+   else:
+    self.AssertEqualBets()
+
+  self.ln += 1
+
+  if self.in_progress:
+   self.MatchTurnLine()
+   while self.MatchMoveLine():
+    self.ln += 1
+   if len(self.players_pos) == 1:
+    self.in_progress = False
+   else:
+    self.AssertEqualBets()
+
+  self.ln += 1
+
+  if self.in_progress:
+   self.MatchRiverLine()
+   while self.MatchMoveLine():
+    self.ln += 1
+   if len(self.players_pos) == 1:
+    self.in_progress = False
+   else:
+    self.AssertEqualBets()
+
+
+
+   
 
 
  def MatchFirstLine(self):
@@ -143,6 +196,34 @@ class GameRecord:
   self.SkipWaste([SitsOutLine])
   m = HoleCardsLine.match(self.lines[self.ln])
   assert m is not None, self.ParsingErr()
+  self.state = GameState.Preflop
+  self.in_progress = True
+
+ def MatchFlopLine(self):
+  m = FlopLine.match(self.lines[self.ln])
+  assert m is not None, self.ParsingErr()
+  self.communal = [m.group(1), m.group(2), m.group(3)]
+  self.state = GameState.Flop
+
+ def MatchTurnLine(self):
+  m = TurnLine.match(self.lines[self.ln])
+  assert m is not None, self.ParsingErr()
+  assert (m.group(1) == self.communal[0]) and (m.group(2) == self.communal[1]) \
+   (m.group(3) == self.communal[2]), self.ParsingErr()
+  self.communal += [m.group(4)]
+  self.state = GameState.Turn
+
+ def MatchRiverLine(self):
+  m = RiverLine.match(self.lines[self.ln])
+  assert m is not None, self.ParsingErr()
+  assert (m.group(1) == self.communal[0]) and (m.group(2) == self.communal[1]) \
+   (m.group(3) == self.communal[2]) and (m.group(4) == self.communal[3]),
+   self.ParsingErr()
+  self.communal += [m.group(5)]
+  self.state = GameState.River
+
+
+
 
 
  def GenerateUtcTimestamp(self, tstr, tzstr):
