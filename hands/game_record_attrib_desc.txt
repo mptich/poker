@@ -19,6 +19,5 @@
 *sb_fee (float) - SB amount
 *sb_found (bool) - temporary attribute. Small Blind player found in blinds' lines
 *seat (dict) - player name -> seat number
-*special_bet (set of str) - set of player names who posted > big blind during initial blind postings (this is to cover their previous blind debts).
 *state (GameState enum) - state of the betting process
 *timestamp (datetime) - date and time of the game in UTC

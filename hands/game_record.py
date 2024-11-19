@@ -3,6 +3,7 @@ from datetime import datetime
 import pytz
 from enum import Enum
 import collections
+from utils import KnownException
 
 class GameState(Enum):
  Preflop=1
@@ -167,9 +168,6 @@ class GameRecord:
   if m is not None:
    index = self.players.index(m.group(1))
    assert self.players[self.players_pos[self.index_in_pos]] == m.group(1)
-   if m.group(1) in self.special_bet:
-    assert self.bet[m.group(1)] == self.sb_fee+self.bb_fee
-    self.special_bet.remove(m.group(1))
    self.players_pos.pop(self.index_in_pos)
    self.index_in_pos %= len(self.players_pos)
    return True
@@ -190,9 +188,6 @@ class GameRecord:
    self.bet[m.group(1)] += amount
    assert self.bet[m.group(1)] > self.current_bet
    self.current_bet = self.bet[m.group(1)]
-   if self.current_bet >= self.sb_fee+self.bb_fee:
-    # Special bets are no longer valid
-    self.special_bet = set()
    self.index_in_pos += 1
    self.index_in_pos %= len(self.players_pos)
    if m.group(3) is not None:
@@ -202,14 +197,10 @@ class GameRecord:
 
  def AssertEqualBets(self):
   assert len(self.players_pos) >= 2
-  active_players = [self.players[x] for x in self.players_pos]
-  active_bets = {x:self.bet[x] for x in active_players}
-  min_bet = min(active_bets.values())
-  max_bet = max(active_bets.values())
-  if min_bet != max_bet:
-   assert max_bet == self.sb_fee + self.bb_fee
-   for p,b in active_bets.items:
-    assert (b == min_bet) or ((b == max_bet) and (p in self.special_bets))
+  active_bets = [self.bet[self.players[x]] for x in self.players_pos]
+  min_bet = min(active_bets)
+  max_bet = max(active_bets)
+  assert min_bet == max_bet
    
 
  def MatchFirstLine(self):
@@ -254,7 +245,6 @@ class GameRecord:
   self.in_chips = {}
   self.seat = {}
   self.bet = collections.defaultdict(float)
-  self.special_bets = set()
   indx = bindx + 1 if player_count > 2 else bindx
   for _ in range(player_count):
    if indx >= len(seats):
@@ -293,14 +283,9 @@ class GameRecord:
    return True
 
   m = BothBlindsLine.match(self.lines[self.ln])
-  if m is None:
-   return False
-  assert m.group(1) in self.players
-  assert float(m.group(2)) == self.sb_fee+self.bb_fee
-  assert not self.bet[m.group(1)]
-  self.bet[m.group(1)] = self.sb_fee+self.bb_fee
-  self.special_bets.add(m.group(1))
-  return True
+  if m is not None:
+   raise KnownException("We do not handle a case of both blinds bets")
+  return False
 
 
  def MatchHoleCardsLine(self):

@@ -18,24 +18,36 @@ def ParseArgs():
     args = parser.parse_args()
     return args
 
-args = ParseArgs()
+def ProcessZipFile(input_file, folder):
+ temp_folder = os.path.join(args.folder, 'temp')
+ os.mkdir(temp_folder)
 
-temp_folder = os.path.join(args.folder, 'temp')
-os.mkdir(temp_folder)
+ zip_file = os.path.join(temp_folder, 'my.zip')
+ shutil.copy(args.input_file, zip_file)
 
-zip_file = os.path.join(temp_folder, 'my.zip')
-shutil.copy(args.input_file, zip_file)
+ curr_folder = os.getcwd()
+ os.chdir(temp_folder)
+ os.system(f"unzip {zip_file}")
+ os.remove(zip_file)
+ os.chdir(curr_folder)
 
-curr_folder = os.getcwd()
-os.chdir(temp_folder)
-os.system(f"unzip {zip_file}")
-os.remove(zip_file)
-os.chdir(curr_folder)
+ hands = []
+ total_known_errors = 0
+ total_bad_errors = 0
 
-hands = []
-for ind, fn in enumerate(glob.glob(os.path.join(temp_folder, "*"))):
- hands += utils.ProcessRecordFile(fn=fn, org_file=args.input_file)
+ for ind, fn in enumerate(glob.glob(os.path.join(temp_folder, "*"))):
+  new_hands, known_error_count, bad_error_count = \
+   utils.ProcessRecordFile(fn=fn, org_file=args.input_file)
+  hands += new_hands
+  total_known_errors += known_error_count
+  total_bad_errors += bad_error_count
 
-print(f"{len(hands)} hands found in {args.input_file}")
+ shutil.rmtree(temp_folder)
+ return hands, total_known_errors, total_bad_errors
 
-shutil.rmtree(temp_folder)
+if __name__ == '__main__':
+ args = ParseArgs()
+ hands, known_errors, bad_errors = ProcessZipFile(args.input_file, args.folder)
+ print(f"{len(hands)} hands, {known_errors} known errors, "\
+  f"{bad_errors} bad errors found in {args.input_file}")
+
