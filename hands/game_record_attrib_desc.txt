@@ -1,5 +1,6 @@
 *bb_fee (float) - BB amount
-*bet (dict) - player name -> current amount in the pot
+*bb_found (bool) - Big Blind player found in blinds' lines
+*bet (default dict) - player name -> current amount in the pot
 *button (int) - seat of the button
 *communal (list) - list of the currently available communal cards
 *currency (str) - currensy used in the game
@@ -14,6 +15,8 @@
 *players (list) - names of players in the order, first element is a SB
 *players_pos (list) - positions of the remaining players (0 position is an SB)
 *sb_fee (float) - SB amount
+*sb_found (bool) - Small Blind player found in blinds' lines
 *seat (dict) - player name -> seat number
+*special_bet (set of str) - set of player names who posted > big blind during initial blind postings (this is to cover their previous blind debts).
 *state (GameState enum) - state of the betting process
 *timestamp (datetime) - date and time of the game in UTC

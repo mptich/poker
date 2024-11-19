@@ -1,6 +1,8 @@
 import re
 from datetime import datetime
 import pytz
+from enum import Enum
+import collections
 
 class GameState(Enum):
  Preflop=0
@@ -22,58 +24,65 @@ SittingOutLine = re.compile(r"(.+) is sitting out")
 SitsOutLine = re.compile(r"(.+) sits out")
 JoinsTheTableLine = re.compile(r"(.+) joins the table at seat \#\d+")
 LeavesTheTableLine = re.compile(r"(.+) leaves the table")
+TimedOutLine = re.compile(r"(.+) has timed out.*")
+ConnectedLine = re.compile(r"(.+) is (dis)?connected.*")
 
-PlayerLine = re.compile(r"Seat (\d+): (.+) \(.+([\d.]+) in chips\)")
+PlayerLine = re.compile(r"Seat (\d+): (.+) \([^\d.]*([\d.]+) in chips\)")
 
-SmallBlindLine = re.compile(r"(.+)\: posts small blind (.+)")
-SmallBlindLine = re.compile(r"(.+)\: posts big blind (.+)")
+SmallBlindLine = re.compile(r"(.+)\: posts small blind [^\d.]*([\d.]+)")
+BigBlindLine = re.compile(r"(.+)\: posts big blind [^\d.]*([\d.]+)")
+BothBlindsLine = re.compile(r"(.+): posts small \& big blinds [^\d.]*([\d.]+)")
 
 HoleCardsLine = re.compile(r"\*\*\* HOLE CARDS \*\*\*")
 FlopLine = re.compile(r"\*\*\* FLOP \*\*\* \[(.{2}) (.{2}) (.{2})\]")
-TurnLine = re.compile(r"\*\*\* TURN \*\*\* [(.{2}) (.{2}) (.{2})\] \[(.{2})\]")
-RiverLine = re.compile(r"\*\*\* RIVER \*\*\* [(.{2}) (.{2}) (.{2}) (.{2})\] \[(.{2})\]")
+TurnLine = re.compile(r"\*\*\* TURN \*\*\* \[(.{2}) (.{2}) (.{2})\] \[(.{2})\]")
+RiverLine = re.compile(r"\*\*\* RIVER \*\*\* \[(.{2}) (.{2}) (.{2}) (.{2})\] \[(.{2})\]")
 
-SummaryLine = re.compile(r"*** SUMMARY ***")
+SummaryLine = re.compile(r"\*\*\* SUMMARY \*\*\*")
 
 
 # See game_record_attrib_desc.txt for attribute description
 class GameRecord:
- WasteLines = [SittingOutLine, StisOutLine]
+ def ProcessPerUserWasteLine(self, m):
+  assert m.group(1) not in self.players, self.ParsingErr()
+
+
+ WasteLines = [([SittingOutLine, SitsOutLine, JoinsTheTableLine,
+  LeavesTheTableLine, TimedOutLine, ConnectedLine], ProcessPerUserWasteLine)]
 
 
  def ParsingErr(self):
   return f"Failed parsing line {self.ln + self.ln_offset}"
 
 
- def SkipWaist(self, waste_lines: list):
-  # Each element in waste_lines coulf be a line, or a tuple of a line and
-  # processing function
+ def SkipWaste(self):
+  # Each element in waste_list is a tuple consisting of the list of lines
+  # and its processing function
 
   while True:
-   if self.ln >= len(self.lines):
+   good_line = True
+   for e in self.WasteLines:
+    for line in e[0]:
+     m = line.match(self.lines[self.ln])
+     if m is not None:
+      e[1](self, m)
+      self.ln += 1
+      good_line = False
+      break
+    if not good_line:
+     break 
+   if good_line or (self.ln >= len(self.lines)):
     return
-   skip = False
-   for l in waste_lines:
-    if isinatance(l, tuple):
-     func = l[1]
-     l = l[0]
-    else:
-     func = None
-    m = l.match(self.lines[self.ln])
-    if m is not None:
-     if func:
-      func(m)
-     skip = True
-     break
-   if not skip:
-    return
-   self.ln += 1
    
 
  def __init__(self, lines: list, line_number: int): 
+  #JUSTATEMP
+  print(f"LN {line_number}")
+
   self.lines = lines
   self.ln_offset = line_number
   self.ln = 0
+  self.players = []
   self.MatchFirstLine()
 
   self.ln = 1
@@ -85,12 +94,11 @@ class GameRecord:
    self.ln += 1
   self.ProcessPlayers()
 
-  self.MatchSmallBlindLine()
+  self.sb_found = self.bb_found = False
+  while self.MatchBlindsLine():
+   self.ln += 1
+  assert self.sb_found and self.bb_found, self.ParsingErr()
 
-  self.ln += 1
-  self.MatchBigBlindLine()
-
-  self.ln += 1
   self.MatchHoleCardsLine()
 
   #JUSTATEMP
@@ -139,19 +147,32 @@ class GameRecord:
 
   
  def MatchMoveLine(self):
-  self.SkipWaste([(JoinsTheTableLine, self.ProcessJoinLeaveTable),
-   (LeavesTheTableLine, self.ProcessJoinLeaveTable)])
+  self.SkipWaste()
    
 
  def AssertEqualBets(self):
   assert len(self.players_pos) >= 2, self.ParsingErr()
-  active_bet = self.bet[self.players[self.players_pos[0]]]
-  for pos in self.players_pos[1:]:
-   assert self.bet[self.players[pos]] == active_bet, self.ParsingErr()
+  active_players = [self.players[x] for x in self.players_pos]
+  active_bets = {x:self.bet[x] for x in active_players}
+  min_bet = min(active_bets.values())
+  max_bet = max(active_bets.values())
+  if min_bet != max_bet:
+   assert max_bet == self.sb_fee + self.bb_fee, self.ParsingErr()
+   for p,b in active_bets.items:
+    assert (b == min_bet) or ((b == max_bet) and (p in self.special_bets)), \
+     self.ParsingErr() 
    
 
  def MatchFirstLine(self):
-  m = FirstLine.match(self.lines[self.ln])
+  line = self.lines[self.ln]
+  # Sometimes there is some crap at the start of teh first line
+  if self.ln_offset == 0:
+   for ind, c in enumerate(line):
+    if c == 'P':
+     break
+   line = line[ind:]
+   
+  m = FirstLine.match(line)
   assert m is not None, self.ParsingErr()
   self.hand_number = int(m.group(1))
   assert m.group(2) in SBBBDict, self.ParsingErr()
@@ -171,28 +192,30 @@ class GameRecord:
 
 
  def MatchPlayerLine(self):
-  self.SkipWaste([SittingOutLine])
+  self.SkipWaste()
   m = PlayerLine.match(self.lines[self.ln])
   if m is None:
    return False
   seat = int(m.group(1))
   assert seat not in self.parsed_players_info, self.ParsingErr()
-  self.parsed_players_info[seat] = (m.group(2), round(float(m.group(3), 2)))
+  self.parsed_players_info[seat] = (m.group(2), round(float(m.group(3)), 2))
   return True
 
 
  def ProcessPlayers(self):
-  assert len(self.parsed_players_info) >= 2, self.ParsingErr()
-  assert len(self.parsed_players_info) <= 20, self.ParsingErr()
+  player_count = len(self.parsed_players_info)
+  assert player_count >= 2, self.ParsingErr()
+  assert player_count <= 20, self.ParsingErr()
   assert self.button in self.parsed_players_info, self.ParsingErr()
   seats = sorted(list(self.parsed_players_info.keys()))
-  bindx = seats.indexof(button)
+  bindx = seats.index(self.button)
 
-  self.players = []
   self.in_chips = {}
   self.seat = {}
-  indx = bindx + 1
-  while True:
+  self.bet = collections.defaultdict(float)
+  self.special_bets = set()
+  indx = bindx + 1 if player_count > 2 else bindx
+  for _ in range(player_count):
    if indx >= len(seats):
     indx = 0
    tup = self.parsed_players_info[seats[indx]]
@@ -200,31 +223,47 @@ class GameRecord:
    self.players.append(name)
    self.in_chips[name] = tup[1] 
    self.seat[name] = seats[indx]
-   if indx == bindx:
-    break
    indx += 1
+  self.players_pos = list(range(player_count))
    
   del self.parsed_players_info
 
 
- def MatchSmallBlindLine(self):
-  self.SkipWaste([SitsOutLine])
+ def MatchBlindsLine(self):
+  self.SkipWaste()
   m = SmallBlindLine.match(self.lines[self.ln])
-  assert m is not None, self.ParsingErr()
-  assert self.players[0] == m.group(1), self.ParsingErr()
-  assert self.sb_fee == float(m.group(2))
-
-
- def MatchBigBlindLine(self):
-  self.SkipWaste([SitsOutLine])
+  if m is not None:
+   assert m.group(1) in self.players, self.ParsingErr()
+   assert float(m.group(2)) == self.sb_fee, self.ParsingErr()
+   assert not self.bet[m.group(1)], self.ParsingErr()
+   self.bet[m.group(1)] = self.sb_fee
+   if m.group(1) == self.players[0]:
+    self.sb_found = True
+   return True
+   
   m = BigBlindLine.match(self.lines[self.ln])
-  assert m is not None, self.ParsingErr()
-  assert self.players[1] == m.group(1), self.ParsingErr()
-  assert self.bb_fee == float(m.group(2))
+  if m is not None:
+   assert m.group(1) in self.players, self.ParsingErr()
+   assert float(m.group(2)) == self.bb_fee, self.ParsingErr()
+   assert not self.bet[m.group(1)], self.ParsingErr()
+   self.bet[m.group(1)] = self.bb_fee
+   if m.group(1) == self.players[1]:
+    self.bb_found = True
+   return True
+
+  m = BothBlindsLine.match(self.lines[self.ln])
+  if m is None:
+   return False
+  assert m.group(1) in self.players, self.ParsingErr()
+  assert float(m.group(2)) == self.sb_fee+self.bb_fee, self.ParsingErr()
+  assert not self.bet[m.group(1)], self.ParsingErr()
+  self.bet[m.group(1)] = self.sb_fee+self.bb_fee
+  self.special_bets.add(m.group(1))
+  return True
 
 
  def MatchHoleCardsLine(self):
-  self.SkipWaste([SitsOutLine])
+  self.SkipWaste()
   m = HoleCardsLine.match(self.lines[self.ln])
   assert m is not None, self.ParsingErr()
   self.state = GameState.Preflop
@@ -251,7 +290,7 @@ class GameRecord:
   m = RiverLine.match(self.lines[self.ln])
   assert m is not None, self.ParsingErr()
   assert (m.group(1) == self.communal[0]) and (m.group(2) == self.communal[1]) \
-   (m.group(3) == self.communal[2]) and (m.group(4) == self.communal[3]),
+   (m.group(3) == self.communal[2]) and (m.group(4) == self.communal[3]), \
    self.ParsingErr()
   self.communal += [m.group(5)]
   self.state = GameState.River
@@ -262,11 +301,3 @@ class GameRecord:
   dt = datetime.strptime(tstr, "%Y/%m/%d %H:%M:%S").replace(tzinfo=tz)
   self.timestamp = dt.astimezone(pytz.utc)
 
-
- def ProcessJoinLeaveTable(self, m):
-  assert m.group(1) not in self.players, self.ParsingErr()
-
-
-print('here')
-a=GameRecord(["PokerStars Hand #253306280353:  Hold'em No Limit ($0.50/$1.00 USD) - 2024/11/08 4:37:04 WET [2024/11/07 23:37:04 ET]"], 100)
-  
