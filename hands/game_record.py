@@ -5,10 +5,10 @@ from enum import Enum
 import collections
 
 class GameState(Enum):
- Preflop=0
- Flop=1
- Turn=2
- River=3
+ Preflop=1
+ Flop=2
+ Turn=3
+ River=4
 
 FirstLine = re.compile(r"PokerStars Hand \#(\d+): +Hold'em No Limit \((.+)\).*\[(\d{4}\/\d{2}\/\d{2} \d{1,2}\:\d{1,2}\:\d{1,2}) ([A-Z]+)\].*")
 
@@ -38,13 +38,20 @@ FlopLine = re.compile(r"\*\*\* FLOP \*\*\* \[(.{2}) (.{2}) (.{2})\]")
 TurnLine = re.compile(r"\*\*\* TURN \*\*\* \[(.{2}) (.{2}) (.{2})\] \[(.{2})\]")
 RiverLine = re.compile(r"\*\*\* RIVER \*\*\* \[(.{2}) (.{2}) (.{2}) (.{2})\] \[(.{2})\]")
 
+# Moves
+FoldsLine = re.compile(r"(.+): folds")
+ChecksLine = re.compile(r"(.+): checks")
+BetsLine = re.compile(r"(.+): bets [^\d.]*([\d.]+)( and is all-in)?")
+CallsLine = re.compile(r"(.+): Calls [^\d.]*([\d.]+)( and is all-in)?")
+RaisesLine = re.compile(r"(.+): raises [^\d.]*([\d.]+) to [^\d.]*([\d.]+)( and is all-in)?")
+
 SummaryLine = re.compile(r"\*\*\* SUMMARY \*\*\*")
 
 
 # See game_record_attrib_desc.txt for attribute description
 class GameRecord:
  def ProcessPerUserWasteLine(self, m):
-  assert m.group(1) not in self.players, self.ParsingErr()
+  assert m.group(1) not in self.players
 
 
  def ProcessIgnoreWasteLine(self, m):
@@ -52,12 +59,8 @@ class GameRecord:
 
 
  WasteLines = [([SittingOutLine, SitsOutLine, JoinsTheTableLine,
-  LeavesTheTableLine, TimedOutLine], ProcessPerUserWasteLine),
-  ([ConnectedLine], ProcessIgnoreWasteLine)]
-
-
- def ParsingErr(self):
-  return f"Failed parsing line {self.ln + self.ln_offset}"
+  LeavesTheTableLine], ProcessPerUserWasteLine),
+  ([TimedOutLine, ConnectedLine], ProcessIgnoreWasteLine)]
 
 
  def SkipWaste(self):
@@ -80,14 +83,15 @@ class GameRecord:
     return
    
 
- def __init__(self, lines: list, line_number: int): 
-  #JUSTATEMP
-  print(f"LN {line_number}")
+ def __init__(self):
+  pass
 
+
+ def ParseLines(self, lines: list): 
   self.lines = lines
-  self.ln_offset = line_number
   self.ln = 0
   self.players = []
+  self.state = GameState.Invalid
   self.MatchFirstLine()
 
   self.ln = 1
@@ -102,14 +106,16 @@ class GameRecord:
   self.sb_found = self.bb_found = False
   while self.MatchBlindsLine():
    self.ln += 1
-  assert self.sb_found and self.bb_found, self.ParsingErr()
+  assert self.sb_found and self.bb_found
+  del self.sb_found
+  del self.bb_found
+  self.current_bet = self.bb_fee
 
   self.MatchHoleCardsLine()
-
-  #JUSTATEMP
-  return
-
   self.ln += 1
+
+  self.index_in_pos = 2 % len(self.players_pos)
+  self.all_in_state_val = 999 # Very high
   while self.MatchMoveLine():
    self.ln += 1
   if len(self.players_pos) == 1:
@@ -117,32 +123,32 @@ class GameRecord:
   else:
    self.AssertEqualBets()
 
-  self.ln += 1
-
   if self.in_progress:
    self.MatchFlopLine()
+   self.ln += 1
+   self.index_in_pos = 0
    while self.MatchMoveLine():
     self.ln += 1
    if len(self.players_pos) == 1:
     self.in_progress = False
    else:
     self.AssertEqualBets()
-
-  self.ln += 1
 
   if self.in_progress:
    self.MatchTurnLine()
+   self.ln += 1
+   self.index_in_pos = 0
    while self.MatchMoveLine():
     self.ln += 1
    if len(self.players_pos) == 1:
     self.in_progress = False
    else:
     self.AssertEqualBets()
-
-  self.ln += 1
 
   if self.in_progress:
    self.MatchRiverLine()
+   self.ln += 1
+   self.index_in_pos = 0
    while self.MatchMoveLine():
     self.ln += 1
    if len(self.players_pos) == 1:
@@ -150,49 +156,79 @@ class GameRecord:
    else:
     self.AssertEqualBets()
 
+  del self.index_in_pos
   
  def MatchMoveLine(self):
   self.SkipWaste()
-   
+  if self.all_in_state_val < self.state.value:
+   return False
+
+  m = FoldsLine.match(self.lines[self.ln]) 
+  if m is not None:
+   index = self.players.index(m.group(1))
+   assert self.players[self.players_pos[self.index_in_pos]] == m.group(1)
+   if m.group(1) in self.special_bet:
+    assert self.bet[m.group(1)] == self.sb_fee+self.bb_fee
+    self.special_bet.remove(m.group(1))
+   self.players_pos.pop(self.index_in_pos)
+   self.index_in_pos %= len(self.players_pos)
+   return True
+
+  m = ChecksLine.match(self.lines[self.ln])
+  if m is not None:
+   index = self.players.index(m.group(1))
+   assert self.players[self.players_pos[self.index_in_pos]] == m.group(1)
+   self.index_in_pos += 1
+   self.index_in_pos %= len(self.players_pos)
+   return True
+
+
+  m = BetsLine.match(self.lines[self.ln])
+  if m is not None:
+   assert self.players[self.players_pos[self.index_in_pos]] == m.group(1)
+   amount = float(m.group(2))
+   self.bet[m.group(1)] += amount
+   assert self.bet[m.group(1)] > self.current_bet
+   self.current_bet = self.bet[m.group(1)]
+   if self.current_bet >= self.sb_fee+self.bb_fee:
+    # Special bets are no longer valid
+    self.special_bet = set()
+   self.index_in_pos += 1
+   self.index_in_pos %= len(self.players_pos)
+   if m.group(3) is not None:
+    self.all_in_state_val = self.state.value
+   return True
+
 
  def AssertEqualBets(self):
-  assert len(self.players_pos) >= 2, self.ParsingErr()
+  assert len(self.players_pos) >= 2
   active_players = [self.players[x] for x in self.players_pos]
   active_bets = {x:self.bet[x] for x in active_players}
   min_bet = min(active_bets.values())
   max_bet = max(active_bets.values())
   if min_bet != max_bet:
-   assert max_bet == self.sb_fee + self.bb_fee, self.ParsingErr()
+   assert max_bet == self.sb_fee + self.bb_fee
    for p,b in active_bets.items:
-    assert (b == min_bet) or ((b == max_bet) and (p in self.special_bets)), \
-     self.ParsingErr() 
+    assert (b == min_bet) or ((b == max_bet) and (p in self.special_bets))
    
 
  def MatchFirstLine(self):
-  line = self.lines[self.ln]
-  # Sometimes there is some crap at the start of teh first line
-  if self.ln_offset == 0:
-   for ind, c in enumerate(line):
-    if c == 'P':
-     break
-   line = line[ind:]
-   
-  m = FirstLine.match(line)
-  assert m is not None, self.ParsingErr()
+  m = FirstLine.match(self.lines[self.ln])
+  assert m is not None
   self.hand_number = int(m.group(1))
-  assert m.group(2) in SBBBDict, self.ParsingErr()
+  assert m.group(2) in SBBBDict
   tup = SBBBDict[m.group(2)]
   self.currency = tup[0]
   self.sb_fee = tup[1]
   self.bb_fee = tup[2]
 
-  assert m.group(4) in TimeZoneDict, self.ParsingErr()
+  assert m.group(4) in TimeZoneDict
   self.GenerateUtcTimestamp(m.group(3), TimeZoneDict[m.group(4)])
 
 
  def MatchSecondLine(self):
   m = SecondLine.match(self.lines[self.ln])
-  assert m is not None, self.ParsingErr()
+  assert m is not None
   self.button = int(m.group(1))
 
 
@@ -202,16 +238,16 @@ class GameRecord:
   if m is None:
    return False
   seat = int(m.group(1))
-  assert seat not in self.parsed_players_info, self.ParsingErr()
+  assert seat not in self.parsed_players_info
   self.parsed_players_info[seat] = (m.group(2), round(float(m.group(3)), 2))
   return True
 
 
  def ProcessPlayers(self):
   player_count = len(self.parsed_players_info)
-  assert player_count >= 2, self.ParsingErr()
-  assert player_count <= 20, self.ParsingErr()
-  assert self.button in self.parsed_players_info, self.ParsingErr()
+  assert player_count >= 2
+  assert player_count <= 20
+  assert self.button in self.parsed_players_info
   seats = sorted(list(self.parsed_players_info.keys()))
   bindx = seats.index(self.button)
 
@@ -238,9 +274,9 @@ class GameRecord:
   self.SkipWaste()
   m = SmallBlindLine.match(self.lines[self.ln])
   if m is not None:
-   assert m.group(1) in self.players, self.ParsingErr()
-   assert float(m.group(2)) == self.sb_fee, self.ParsingErr()
-   assert not self.bet[m.group(1)], self.ParsingErr()
+   assert m.group(1) in self.players
+   assert float(m.group(2)) == self.sb_fee
+   assert not self.bet[m.group(1)]
    self.bet[m.group(1)] = self.sb_fee
    if m.group(1) == self.players[0]:
     self.sb_found = True
@@ -248,9 +284,9 @@ class GameRecord:
    
   m = BigBlindLine.match(self.lines[self.ln])
   if m is not None:
-   assert m.group(1) in self.players, self.ParsingErr()
-   assert float(m.group(2)) == self.bb_fee, self.ParsingErr()
-   assert not self.bet[m.group(1)], self.ParsingErr()
+   assert m.group(1) in self.players
+   assert float(m.group(2)) == self.bb_fee
+   assert not self.bet[m.group(1)]
    self.bet[m.group(1)] = self.bb_fee
    if m.group(1) == self.players[1]:
     self.bb_found = True
@@ -259,9 +295,9 @@ class GameRecord:
   m = BothBlindsLine.match(self.lines[self.ln])
   if m is None:
    return False
-  assert m.group(1) in self.players, self.ParsingErr()
-  assert float(m.group(2)) == self.sb_fee+self.bb_fee, self.ParsingErr()
-  assert not self.bet[m.group(1)], self.ParsingErr()
+  assert m.group(1) in self.players
+  assert float(m.group(2)) == self.sb_fee+self.bb_fee
+  assert not self.bet[m.group(1)]
   self.bet[m.group(1)] = self.sb_fee+self.bb_fee
   self.special_bets.add(m.group(1))
   return True
@@ -270,33 +306,32 @@ class GameRecord:
  def MatchHoleCardsLine(self):
   self.SkipWaste()
   m = HoleCardsLine.match(self.lines[self.ln])
-  assert m is not None, self.ParsingErr()
+  assert m is not None
   self.state = GameState.Preflop
   self.in_progress = True
 
 
  def MatchFlopLine(self):
   m = FlopLine.match(self.lines[self.ln])
-  assert m is not None, self.ParsingErr()
+  assert m is not None
   self.communal = [m.group(1), m.group(2), m.group(3)]
   self.state = GameState.Flop
 
 
  def MatchTurnLine(self):
   m = TurnLine.match(self.lines[self.ln])
-  assert m is not None, self.ParsingErr()
+  assert m is not None
   assert (m.group(1) == self.communal[0]) and (m.group(2) == self.communal[1]) \
-   (m.group(3) == self.communal[2]), self.ParsingErr()
+   (m.group(3) == self.communal[2])
   self.communal += [m.group(4)]
   self.state = GameState.Turn
 
 
  def MatchRiverLine(self):
   m = RiverLine.match(self.lines[self.ln])
-  assert m is not None, self.ParsingErr()
+  assert m is not None
   assert (m.group(1) == self.communal[0]) and (m.group(2) == self.communal[1]) \
-   (m.group(3) == self.communal[2]) and (m.group(4) == self.communal[3]), \
-   self.ParsingErr()
+   (m.group(3) == self.communal[2]) and (m.group(4) == self.communal[3])
   self.communal += [m.group(5)]
   self.state = GameState.River
 

@@ -4,26 +4,46 @@ def ProcessRecordFile(fn: str, org_file: str):
  """
  Processes a text file containing hands. Returns a list of GameRecord objects
  """
- print(f"Processing {fn} from {org_file}")
+ #print(f"Processing {fn} from {org_file}")
+
+ def __GenerateHand(lines, first_line):
+  nonlocal fn, org_file
+  h = GameRecord()
+  try:
+   h.ParseLines(lines)
+  except Exception as e:
+   print(f"ERROR at line {h.ln+first_line} in {fn} from {org_file}") 
+   traceback.print_exc()
+   return None
+  return h
 
  hands = []
  lines = []
  with open(fn, 'r', encoding = "ISO-8859-1") as fin:
-  first_line = None
   for ln, l in enumerate(fin):
    l = l.strip()
+   if (ln == 0) and l:
+    # Some files have some junk in the first line
+    for ind, c in enumerate(l):
+     if c == 'P':
+      break
+    l = l[ind:]
+
    if l:
-    lines.append(l)
-    if first_line is None:
+    if not lines:
      first_line = ln
+    lines.append(l)
    else:
     if lines:
-     hands.append(GameRecord(lines=lines, line_number=first_line))
+     h = __GenerateHand(lines, first_line)
      lines = []
-    first_line = None
+     if h is not None:
+      hands.append(h)
 
  if lines:
-  hands.append(GameRecord(lines=lines, line_number=first_line))
+  h = __GenerateHand(lines, first_line)
+  if h is not None:
+   hands.append(h)
 
  return hands 
     
