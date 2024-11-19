@@ -32,7 +32,9 @@ os.remove(zip_file)
 os.chdir(curr_folder)
 
 hands = []
-for fn in glob.glob(os.path.join(temp_folder, "*")):
+for ind, fn in enumerate(glob.glob(os.path.join(temp_folder, "*"))):
  hands += utils.ProcessRecordFile(fn=fn, org_file=args.input_file)
 
-os.rmtree(temp_folder)
+print(f"{len(hands)} hands found in {args.input_file}")
+
+shutil.rmtree(temp_folder)

@@ -8,7 +8,7 @@ def ProcessRecordFile(fn: str, org_file: str):
 
  hands = []
  lines = []
- with open(fn, 'r') as fin:
+ with open(fn, 'r', encoding = "ISO-8859-1") as fin:
   first_line = None
   for ln, l in enumerate(fin):
    l = l.strip()
@@ -23,7 +23,7 @@ def ProcessRecordFile(fn: str, org_file: str):
     first_line = None
 
  if lines:
-  hands.append(GameRecord(lines=lines, line_number=ln))
+  hands.append(GameRecord(lines=lines, line_number=first_line))
 
  return hands 
     

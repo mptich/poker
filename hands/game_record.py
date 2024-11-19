@@ -10,7 +10,7 @@ class GameState(Enum):
  Turn=2
  River=3
 
-FirstLine = re.compile(r"PokerStars Hand \#(\d+): +Hold'em No Limit \((.+)\).*\[(\d{4}\/\d{2}\/\d{2} \d{2}\:\d{2}\:\d{2}) ([A-Z]+)\].*")
+FirstLine = re.compile(r"PokerStars Hand \#(\d+): +Hold'em No Limit \((.+)\).*\[(\d{4}\/\d{2}\/\d{2} \d{1,2}\:\d{1,2}\:\d{1,2}) ([A-Z]+)\].*")
 
 SBBBDict = {"$0.50/$1.00 USD": ("USD", 0.5, 1.),
          "$1.00/$2.00 USD": ("USD", 1., 2.)}
@@ -47,8 +47,13 @@ class GameRecord:
   assert m.group(1) not in self.players, self.ParsingErr()
 
 
+ def ProcessIgnoreWasteLine(self, m):
+  pass
+
+
  WasteLines = [([SittingOutLine, SitsOutLine, JoinsTheTableLine,
-  LeavesTheTableLine, TimedOutLine, ConnectedLine], ProcessPerUserWasteLine)]
+  LeavesTheTableLine, TimedOutLine], ProcessPerUserWasteLine),
+  ([ConnectedLine], ProcessIgnoreWasteLine)]
 
 
  def ParsingErr(self):
