@@ -152,17 +152,18 @@ class GameRecord:
 
   del self.index_in_pos
 
-  #JUSTATEMP
+  #JUSTATEMP START
   while self.ln < len(self.lines):
    m = TotalPotLine.match(self.lines[self.ln])
    if m is not None:
     amount = FloatToInt(m.group(1))
     tbets = sum([self.bet[x] for x in self.players])
-    if amount != tbets:
+    if amount != tbets + self.donations:
      print("DISCREPANCY", amount, tbets)
      assert False
     break
    self.ln += 1
+  #JUSTATEMP END
 
   
  def MatchMoveLine(self):
@@ -327,6 +328,7 @@ class GameRecord:
   self.in_chips = {}
   self.seat = {}
   self.bet = collections.defaultdict(int)
+  self.donations = 0 
   indx = bindx + 1 if player_count > 2 else bindx
   for _ in range(player_count):
    if indx >= len(seats):
@@ -351,16 +353,14 @@ class GameRecord:
    amount = FloatToInt(m.group(2))
    assert player in self.players
    assert amount == self.sb_fee
-   assert not self.bet[player]
-   self.bet[player] = amount
    assert self.in_chips[player] >= amount
    self.in_chips[player] -= amount
+   assert not self.bet[player]
    if player == self.players[0]:
     self.sb_found = True
-   #JUSTATEMP - UNCOMMENT
-   #else:
-    #JUSTATEMP - UNCOMMENT
-    #raise KnownException("Forced small blind bet")
+    self.bet[player] = amount
+   else:
+    self.donations += amount
    return True
    
   m = BigBlindLine.match(self.lines[self.ln])
@@ -375,15 +375,21 @@ class GameRecord:
    self.in_chips[player] -= amount
    if player == self.players[1]:
     self.bb_found = True
-   #JUSTATEMP - UNCOMMENT
-   #else:
-    #JUSTATEMP - uncomment
-    #raise KnownException("Forced big blind bet")
    return True
 
   m = BothBlindsLine.match(self.lines[self.ln])
   if m is not None:
-   raise KnownException("Forced both blinds bets")
+   player = m.group(1)
+   amount = FloatToInt(m.group(2))
+   assert player in self.players
+   assert amount == self.sb_fee + self.bb_fee
+   assert not self.bet[player]
+   self.bet[player] = self.bb_fee
+   self.donations += self.sb_fee
+   assert self.in_chips[player] >= amount
+   self.in_chips[player] -= amount
+   return True
+
   return False
 
 

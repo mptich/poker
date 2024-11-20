@@ -1,3 +1,4 @@
+import sys
 import traceback
 import collections
 
@@ -33,7 +34,7 @@ def ProcessRecordFile(fn: str, org_file: str):
    return None
   except Exception as e:
    print(f"ERROR {e} at line {h.ln+first_line} in {fn} from {org_file}") 
-   traceback.print_exc()
+   traceback.print_exc(file=sys.stdout)
    bad_error_count += 1
    return None
   return h
