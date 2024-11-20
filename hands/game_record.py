@@ -3,7 +3,7 @@ from datetime import datetime
 import pytz
 from enum import Enum
 import collections
-from utils import KnownException
+from utils import KnownException, FloatToInt
 
 class GameState(Enum):
  Preflop=1
@@ -43,8 +43,9 @@ RiverLine = re.compile(r"\*\*\* RIVER \*\*\* \[(.{2}) (.{2}) (.{2}) (.{2})\] \[(
 FoldsLine = re.compile(r"(.+): folds")
 ChecksLine = re.compile(r"(.+): checks")
 BetsLine = re.compile(r"(.+): bets [^\d.]*([\d.]+)( and is all-in)?")
-CallsLine = re.compile(r"(.+): Calls [^\d.]*([\d.]+)( and is all-in)?")
+CallsLine = re.compile(r"(.+): calls [^\d.]*([\d.]+)( and is all-in)?")
 RaisesLine = re.compile(r"(.+): raises [^\d.]*([\d.]+) to [^\d.]*([\d.]+)( and is all-in)?")
+UncalledBetLine = re.compile(r"Uncalled bet \([^\d.]*([\d.]+)\) returned to (.+)")
 
 SummaryLine = re.compile(r"\*\*\* SUMMARY \*\*\*")
 
@@ -59,9 +60,9 @@ class GameRecord:
   pass
 
 
- WasteLines = [([SittingOutLine, SitsOutLine, JoinsTheTableLine,
-  LeavesTheTableLine], ProcessPerUserWasteLine),
-  ([TimedOutLine, ConnectedLine], ProcessIgnoreWasteLine)]
+ WasteLines = [([SittingOutLine, SitsOutLine, JoinsTheTableLine],
+  ProcessPerUserWasteLine),
+  ([TimedOutLine, ConnectedLine, LeavesTheTableLine], ProcessIgnoreWasteLine)]
 
 
  def SkipWaste(self):
@@ -92,7 +93,6 @@ class GameRecord:
   self.lines = lines
   self.ln = 0
   self.players = []
-  self.state = GameState.Invalid
   self.MatchFirstLine()
 
   self.ln = 1
@@ -115,14 +115,10 @@ class GameRecord:
   self.MatchHoleCardsLine()
   self.ln += 1
 
-  self.index_in_pos = 2 % len(self.players_pos)
-  self.all_in_state_val = 999 # Very high
+  self.index_in_pos = 2 % len(self.active_pos)
   while self.MatchMoveLine():
    self.ln += 1
-  if len(self.players_pos) == 1:
-   self.in_progress = False
-  else:
-   self.AssertEqualBets()
+  self.AssertEqualBets()
 
   if self.in_progress:
    self.MatchFlopLine()
@@ -130,10 +126,7 @@ class GameRecord:
    self.index_in_pos = 0
    while self.MatchMoveLine():
     self.ln += 1
-   if len(self.players_pos) == 1:
-    self.in_progress = False
-   else:
-    self.AssertEqualBets()
+   self.AssertEqualBets()
 
   if self.in_progress:
    self.MatchTurnLine()
@@ -141,10 +134,7 @@ class GameRecord:
    self.index_in_pos = 0
    while self.MatchMoveLine():
     self.ln += 1
-   if len(self.players_pos) == 1:
-    self.in_progress = False
-   else:
-    self.AssertEqualBets()
+   self.AssertEqualBets()
 
   if self.in_progress:
    self.MatchRiverLine()
@@ -152,55 +142,135 @@ class GameRecord:
    self.index_in_pos = 0
    while self.MatchMoveLine():
     self.ln += 1
-   if len(self.players_pos) == 1:
-    self.in_progress = False
-   else:
-    self.AssertEqualBets()
+   self.AssertEqualBets()
 
   del self.index_in_pos
+
   
  def MatchMoveLine(self):
   self.SkipWaste()
-  if self.all_in_state_val < self.state.value:
-   return False
+
+  #JUSTATEMP START
+  print("ln", self.ln)
+  print("active", self.active_pos)
+  print(self.index_in_pos)
+  #JUSTATEMP END
 
   m = FoldsLine.match(self.lines[self.ln]) 
   if m is not None:
    index = self.players.index(m.group(1))
-   assert self.players[self.players_pos[self.index_in_pos]] == m.group(1)
-   self.players_pos.pop(self.index_in_pos)
-   self.index_in_pos %= len(self.players_pos)
+   assert self.players[self.active_pos[self.index_in_pos]] == m.group(1)
+   self.active_pos.pop(self.index_in_pos)
+   if self.active_pos:
+    self.index_in_pos %= len(self.active_pos)
+   if len(self.all_in_pos) + len(self.active_pos) < 2:
+    self.in_progress = False
    return True
 
   m = ChecksLine.match(self.lines[self.ln])
   if m is not None:
-   index = self.players.index(m.group(1))
-   assert self.players[self.players_pos[self.index_in_pos]] == m.group(1)
+   assert self.players[self.active_pos[self.index_in_pos]] == m.group(1)
    self.index_in_pos += 1
-   self.index_in_pos %= len(self.players_pos)
+   self.index_in_pos %= len(self.active_pos)
    return True
-
 
   m = BetsLine.match(self.lines[self.ln])
   if m is not None:
-   assert self.players[self.players_pos[self.index_in_pos]] == m.group(1)
-   amount = float(m.group(2))
-   self.bet[m.group(1)] += amount
-   assert self.bet[m.group(1)] > self.current_bet
-   self.current_bet = self.bet[m.group(1)]
-   self.index_in_pos += 1
-   self.index_in_pos %= len(self.players_pos)
-   if m.group(3) is not None:
-    self.all_in_state_val = self.state.value
+   assert self.players[self.active_pos[self.index_in_pos]] == m.group(1)
+   amount = FloatToInt(m.group(2))
+   player = m.group(1)
+   self.bet[player] += amount
+   assert self.bet[player] > self.current_bet
+   self.current_bet = self.bet[player]
+   assert self.in_chips[player] >= amount
+   self.in_chips[player] -= amount
+   # m.group(3) is all-in
+   assert bool(self.in_chips[player]) == (m.group(3) is None)
+   if self.in_chips[player]:
+    # Not all-in
+    self.index_in_pos += 1
+   else:
+    self.all_in_pos.append(self.active_pos[self.index_in_pos])
+    self.active_pos.pop(self.index_in_pos)
+   if self.active_pos:
+    self.index_in_pos %= len(self.active_pos)
    return True
+
+  m = CallsLine.match(self.lines[self.ln])
+  if m is not None:
+   assert self.players[self.active_pos[self.index_in_pos]] == m.group(1)
+   amount = FloatToInt(m.group(2))
+   player = m.group(1)
+   self.bet[player] += amount
+   assert self.in_chips[player] >= amount
+   self.in_chips[player] -= amount
+   assert (self.bet[player] == self.current_bet) or \
+    ((self.bet[player] <= self.current_bet) and (self.in_chips[player] == 0.))
+   # m.group(3) is all-in
+   assert bool(self.in_chips[player]) == (m.group(3) is None)
+   if self.in_chips[player]:
+    # Not all-in
+    self.index_in_pos += 1
+   else:
+    self.all_in_pos.append(self.active_pos[self.index_in_pos])
+    self.active_pos.pop(self.index_in_pos)
+   if self.active_pos:
+    self.index_in_pos %= len(self.active_pos)
+   return True
+
+  m = RaisesLine.match(self.lines[self.ln])
+  if m is not None:
+   assert self.players[self.active_pos[self.index_in_pos]] == m.group(1)
+   by_amount = FloatToInt(m.group(2))
+   #to_amount = FloatToInt(m.group(3))
+   player = m.group(1)
+   bet = self.current_bet + by_amount
+   amount = bet - self.bet[player]
+   self.current_bet = self.bet[player] = bet
+   assert self.in_chips[player] >= amount
+   self.in_chips[player] -= amount
+   # m.group(4) is all-in
+   assert bool(self.in_chips[player]) == (m.group(4) is None)
+   if self.in_chips[player]:
+    # Not all-in
+    self.index_in_pos += 1
+   else:
+    self.all_in_pos.append(self.active_pos[self.index_in_pos])
+    self.active_pos.pop(self.index_in_pos)
+   if self.active_pos:
+    self.index_in_pos %= len(self.active_pos)
+   return True
+
+  m = UncalledBetLine.match(self.lines[self.ln])
+  if m is not None:
+   amount = FloatToInt(m.group(1))
+   player = m.group(2)
+   assert self.bet[player] >= amount
+   assert self.bet[player] == self.current_bet
+   self.bet[player] -= amount
+   self.current_bet -= amount
+   if (self.in_chips[player] == 0.) and amount:
+    # Move it back from all_in_pos to active_pos
+    index = self.players.index(player)
+    self.all_in_pos.remove(index)
+    assert not self.active_pos
+    self.active_pos = [index]
+   self.in_chips[player] += amount
+   for p in self.players:
+    assert self.bet[p] <= self.current_bet
+   return True
+
+  return False
 
 
  def AssertEqualBets(self):
-  assert len(self.players_pos) >= 2
-  active_bets = [self.bet[self.players[x]] for x in self.players_pos]
-  min_bet = min(active_bets)
+  if len(self.active_pos) < 2:
+   return
+  active_players = [self.players[x] for x in self.active_pos]
+  active_bets = [self.bet[x] for x in active_players]
   max_bet = max(active_bets)
-  assert min_bet == max_bet
+  min_bet = min(active_bets)
+  assert max_bet == min_bet == self.current_bet
    
 
  def MatchFirstLine(self):
@@ -210,8 +280,8 @@ class GameRecord:
   assert m.group(2) in SBBBDict
   tup = SBBBDict[m.group(2)]
   self.currency = tup[0]
-  self.sb_fee = tup[1]
-  self.bb_fee = tup[2]
+  self.sb_fee = FloatToInt(tup[1])
+  self.bb_fee = FloatToInt(tup[2])
 
   assert m.group(4) in TimeZoneDict
   self.GenerateUtcTimestamp(m.group(3), TimeZoneDict[m.group(4)])
@@ -230,7 +300,7 @@ class GameRecord:
    return False
   seat = int(m.group(1))
   assert seat not in self.parsed_players_info
-  self.parsed_players_info[seat] = (m.group(2), round(float(m.group(3)), 2))
+  self.parsed_players_info[seat] = (m.group(2), FloatToInt(m.group(3)))
   return True
 
 
@@ -244,7 +314,7 @@ class GameRecord:
 
   self.in_chips = {}
   self.seat = {}
-  self.bet = collections.defaultdict(float)
+  self.bet = collections.defaultdict(int)
   indx = bindx + 1 if player_count > 2 else bindx
   for _ in range(player_count):
    if indx >= len(seats):
@@ -255,7 +325,10 @@ class GameRecord:
    self.in_chips[name] = tup[1] 
    self.seat[name] = seats[indx]
    indx += 1
-  self.players_pos = list(range(player_count))
+  self.active_pos = list(range(player_count))
+  self.all_in_pos = []
+  #JUSTATEMP
+  print("PLAYERS", self.players)
    
   del self.parsed_players_info
 
@@ -265,7 +338,7 @@ class GameRecord:
   m = SmallBlindLine.match(self.lines[self.ln])
   if m is not None:
    assert m.group(1) in self.players
-   assert float(m.group(2)) == self.sb_fee
+   assert FloatToInt(m.group(2)) == self.sb_fee
    assert not self.bet[m.group(1)]
    self.bet[m.group(1)] = self.sb_fee
    if m.group(1) == self.players[0]:
@@ -275,7 +348,7 @@ class GameRecord:
   m = BigBlindLine.match(self.lines[self.ln])
   if m is not None:
    assert m.group(1) in self.players
-   assert float(m.group(2)) == self.bb_fee
+   assert FloatToInt(m.group(2)) == self.bb_fee
    assert not self.bet[m.group(1)]
    self.bet[m.group(1)] = self.bb_fee
    if m.group(1) == self.players[1]:
@@ -307,7 +380,7 @@ class GameRecord:
   m = TurnLine.match(self.lines[self.ln])
   assert m is not None
   assert (m.group(1) == self.communal[0]) and (m.group(2) == self.communal[1]) \
-   (m.group(3) == self.communal[2])
+   and (m.group(3) == self.communal[2])
   self.communal += [m.group(4)]
   self.state = GameState.Turn
 
@@ -316,7 +389,7 @@ class GameRecord:
   m = RiverLine.match(self.lines[self.ln])
   assert m is not None
   assert (m.group(1) == self.communal[0]) and (m.group(2) == self.communal[1]) \
-   (m.group(3) == self.communal[2]) and (m.group(4) == self.communal[3])
+   and (m.group(3) == self.communal[2]) and (m.group(4) == self.communal[3])
   self.communal += [m.group(5)]
   self.state = GameState.River
 

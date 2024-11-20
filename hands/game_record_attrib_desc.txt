@@ -1,22 +1,21 @@
-*all_in_state_val (int) - value of the GameSate when betting moved into "all-in" modei. Initialized to a large integer
-*bb_fee (float) - BB amount
+*active_pos (list) - positions of the remaining active players (0 position is an SB) - those that have not falded and have not all-inned
+*all_in_pos (list) - positions of the players that are in all-in
+*bb_fee (int) - BB amount
 *bb_found (bool) - temporary attribute. Big Blind player found in blinds' lines
 *bet (default dict) - player name -> current amount in the pot
 *button (int) - seat of the button
 *communal (list) - list of the currently available communal cards
 *currency (str) - currensy used in the game
-*current_bet (float) - current bet everybody has to match
+*current_bet (int) - current bet everybody has to match
 *hand_number (int) - number of the game, follows "#" in the first game line
 *in_chips (dict) - player name -> amount in chips
-*in_progress (bool) - betting is in progress
 *index_in_pos (int) - temporary attribute. Current index in 'players_pos'
 *lines (list) - list of lines for this game from a game file
 *ln (int) - current line number in 'lines'
 *moves (list of lists) - consists of 4 lists: 0 - list of preflop moves etc
 *parsed_players_info (dict) - temporary attribute. A dictionary of player's seat -> (player name, money in chips)
 *players (list) - names of players in the order, first element is a SB
-*players_pos (list) - positions of the remaining players (0 position is an SB)
-*sb_fee (float) - SB amount
+*sb_fee (int) - SB amount
 *sb_found (bool) - temporary attribute. Small Blind player found in blinds' lines
 *seat (dict) - player name -> seat number
 *state (GameState enum) - state of the betting process

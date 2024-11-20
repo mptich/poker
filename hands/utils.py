@@ -1,7 +1,16 @@
-from game_record import GameRecord
+import traceback
 
 class KnownException(Exception):
  pass
+
+def FloatToInt(fl_str: str):
+ """
+ To convert money to integer number
+ """
+ return round(float(fl_str) * 1000)
+
+# Place it here to avoid circular dependecies
+from game_record import GameRecord
 
 def ProcessRecordFile(fn: str, org_file: str):
  """
@@ -12,6 +21,8 @@ def ProcessRecordFile(fn: str, org_file: str):
  known_error_count = 0
 
  def __GenerateHand(lines, first_line):
+  #JUSTATEMP
+  print("first_line", first_line)
   nonlocal fn, org_file, bad_error_count, known_error_count
   h = GameRecord()
   try:
@@ -25,6 +36,8 @@ def ProcessRecordFile(fn: str, org_file: str):
    print(f"ERROR at line {h.ln+first_line} in {fn} from {org_file}") 
    traceback.print_exc()
    bad_error_count += 1
+   #JUSTATEMP
+   raise
    return None
   return h
 
