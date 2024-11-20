@@ -13,13 +13,15 @@ import utils
 def ParseArgs():
     parser = argparse.ArgumentParser()
     parser.add_argument('-f', '--folder', help="Output folder to write to",
-            required=True)
+     required=True)
     parser.add_argument('-i', '--input_file', help="Input zip file",
-            required=True)
+     required=True)
+    parser.add_argument('-n', '--dont_erase',
+     help="Do not erase temp folder (for debugging)", action='store_true')
     args = parser.parse_args()
     return args
 
-def ProcessZipFile(input_file, folder):
+def ProcessZipFile(input_file, folder, erase_temp=True):
  temp_folder = os.path.join(args.folder, 'temp')
  os.mkdir(temp_folder)
 
@@ -43,12 +45,14 @@ def ProcessZipFile(input_file, folder):
   total_known_errors.update(known_errors)
   total_bad_errors += bad_error_count
 
- shutil.rmtree(temp_folder)
+ if erase_temp:
+  shutil.rmtree(temp_folder)
  return hands, total_known_errors, total_bad_errors
 
 if __name__ == '__main__':
  args = ParseArgs()
- hands, known_errors, bad_errors = ProcessZipFile(args.input_file, args.folder)
+ hands, known_errors, bad_errors = ProcessZipFile(args.input_file, args.folder,
+  erase_temp=not args.dont_erase)
  print(f"The following found in {args.input_file}")
  print(f"{len(hands)} hands, {bad_errors} bad errors\nKnown errors:")
  for k,v in known_errors.items():
