@@ -38,6 +38,9 @@ HoleCardsLine = re.compile(r"\*\*\* HOLE CARDS \*\*\*")
 FlopLine = re.compile(r"\*\*\* FLOP \*\*\* \[(.{2}) (.{2}) (.{2})\]")
 TurnLine = re.compile(r"\*\*\* TURN \*\*\* \[(.{2}) (.{2}) (.{2})\] \[(.{2})\]")
 RiverLine = re.compile(r"\*\*\* RIVER \*\*\* \[(.{2}) (.{2}) (.{2}) (.{2})\] \[(.{2})\]")
+FirstFlopLine = re.compile(r"\*\*\* FIRST FLOP.*") 
+FirstTurnLine = re.compile(r"\*\*\* FIRST TURN.*")
+FirstRiverLine = re.compile(r"\*\*\* FIRST RIVER.*")
 
 # Moves
 FoldsLine = re.compile(r"(.+): folds")
@@ -53,7 +56,8 @@ SummaryLine = re.compile(r"\*\*\* SUMMARY \*\*\*")
 # See game_record_attrib_desc.txt for attribute description
 class GameRecord:
  def ProcessPerUserWasteLine(self, m):
-  assert m.group(1) not in self.players
+  if m.group(1) in self.players:
+   raise KnownException("Weird repositioning")
 
 
  def ProcessIgnoreWasteLine(self, m):
@@ -198,8 +202,6 @@ class GameRecord:
    self.bet[player] += amount
    assert self.in_chips[player] >= amount
    self.in_chips[player] -= amount
-   #JUSTATEMP
-   print("uuuu", player, self.current_bet, self.bet[player], self.in_chips[player])
    assert (self.bet[player] == self.current_bet) or \
     ((self.bet[player] <= self.current_bet) and (self.in_chips[player] == 0.))
    # m.group(3) is all-in
@@ -341,10 +343,8 @@ class GameRecord:
    self.in_chips[player] -= amount
    if player == self.players[0]:
     self.sb_found = True
-   #JUSTATEMP START
    else:
-    print("SMALL BL FORCED", player, self.ln)
-   #JUSTATEMP END
+    raise KnownException("Forced small blind bet")
    return True
    
   m = BigBlindLine.match(self.lines[self.ln])
@@ -359,15 +359,13 @@ class GameRecord:
    self.in_chips[player] -= amount
    if player == self.players[1]:
     self.bb_found = True
-   #JUSTATEMP START
    else:
-    print("BIG BL FORCED", player, self.ln)
-   #JUSTATEMP END
+    raise KnownException("Forced big blind bet")
    return True
 
   m = BothBlindsLine.match(self.lines[self.ln])
   if m is not None:
-   raise KnownException("We do not handle a case of both blinds bets")
+   raise KnownException("Forced both blinds bets")
   return False
 
 
@@ -381,14 +379,20 @@ class GameRecord:
 
  def MatchFlopLine(self):
   m = FlopLine.match(self.lines[self.ln])
-  assert m is not None
+  if m is None:
+   m = FirstFlopLine.match(self.lines[self.ln])
+   assert m is not None
+   raise  KnownException("Multiple flops")
   self.communal = [m.group(1), m.group(2), m.group(3)]
   self.state = GameState.Flop
 
 
  def MatchTurnLine(self):
   m = TurnLine.match(self.lines[self.ln])
-  assert m is not None
+  if m is None:
+   m = FirstTurnLine.match(self.lines[self.ln])
+   assert m is not None
+   raise KnownException("Multiple turns")
   assert (m.group(1) == self.communal[0]) and (m.group(2) == self.communal[1]) \
    and (m.group(3) == self.communal[2])
   self.communal += [m.group(4)]
@@ -397,7 +401,10 @@ class GameRecord:
 
  def MatchRiverLine(self):
   m = RiverLine.match(self.lines[self.ln])
-  assert m is not None
+  if m is None:
+   m = FirstRiverLine.match(self.lines[self.ln])
+   assert m is not None
+   raise KnownException("Multiple rivers")
   assert (m.group(1) == self.communal[0]) and (m.group(2) == self.communal[1]) \
    and (m.group(3) == self.communal[2]) and (m.group(4) == self.communal[3])
   self.communal += [m.group(5)]

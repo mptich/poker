@@ -3,6 +3,7 @@ import os
 import shutil
 import glob
 import sys
+import collections
 
 import utils
 
@@ -32,14 +33,14 @@ def ProcessZipFile(input_file, folder):
  os.chdir(curr_folder)
 
  hands = []
- total_known_errors = 0
+ total_known_errors = collections.Counter()
  total_bad_errors = 0
 
  for ind, fn in enumerate(glob.glob(os.path.join(temp_folder, "*"))):
-  new_hands, known_error_count, bad_error_count = \
+  new_hands, known_errors, bad_error_count = \
    utils.ProcessRecordFile(fn=fn, org_file=args.input_file)
   hands += new_hands
-  total_known_errors += known_error_count
+  total_known_errors.update(known_errors)
   total_bad_errors += bad_error_count
 
  shutil.rmtree(temp_folder)
@@ -48,6 +49,8 @@ def ProcessZipFile(input_file, folder):
 if __name__ == '__main__':
  args = ParseArgs()
  hands, known_errors, bad_errors = ProcessZipFile(args.input_file, args.folder)
- print(f"{len(hands)} hands, {known_errors} known errors, "\
-  f"{bad_errors} bad errors found in {args.input_file}")
+ print(f"The following found in {args.input_file}")
+ print(f"{len(hands)} hands, {bad_errors} bad errors\nKnown errors:")
+ for k,v in known_errors.items():
+  print(f"{k}: {v}")
 

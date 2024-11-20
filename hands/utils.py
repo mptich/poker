@@ -1,4 +1,5 @@
 import traceback
+import collections
 
 class KnownException(Exception):
  pass
@@ -18,26 +19,22 @@ def ProcessRecordFile(fn: str, org_file: str):
  """
  print(f"Processing {fn} from {org_file}")
  bad_error_count = 0
- known_error_count = 0
+ known_errors = collections.defaultdict(int)
 
  def __GenerateHand(lines, first_line):
-  #JUSTATEMP
-  print("first_line", first_line)
-  nonlocal fn, org_file, bad_error_count, known_error_count
+  nonlocal fn, org_file, bad_error_count, known_errors
   h = GameRecord()
   try:
    h.ParseLines(lines)
   except KnownException as ke:
    print(f"KNOWN EXCEPTION at line {h.ln+first_line} in {fn} from {org_file}")
    print(ke)
-   known_error_count += 1
+   known_errors[str(ke)] += 1
    return None
   except Exception as e:
    print(f"ERROR at line {h.ln+first_line} in {fn} from {org_file}") 
    traceback.print_exc()
    bad_error_count += 1
-   #JUSTATEMP
-   raise
    return None
   return h
 
@@ -69,5 +66,5 @@ def ProcessRecordFile(fn: str, org_file: str):
   if h is not None:
    hands.append(h)
 
- return hands, known_error_count, bad_error_count 
+ return hands, known_errors, bad_error_count 
     
