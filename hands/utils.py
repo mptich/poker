@@ -27,12 +27,12 @@ def ProcessRecordFile(fn: str, org_file: str):
   try:
    h.ParseLines(lines)
   except KnownException as ke:
-   print(f"KNOWN EXCEPTION at line {h.ln+first_line} in {fn} from {org_file}")
-   print(ke)
+   print(f"KNOWN EXCEPTION {ke} at line {h.ln+first_line} in {fn} " \
+    f"from {org_file}")
    known_errors[str(ke)] += 1
    return None
   except Exception as e:
-   print(f"ERROR at line {h.ln+first_line} in {fn} from {org_file}") 
+   print(f"ERROR {e} at line {h.ln+first_line} in {fn} from {org_file}") 
    traceback.print_exc()
    bad_error_count += 1
    return None

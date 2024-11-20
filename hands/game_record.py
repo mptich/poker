@@ -6,10 +6,10 @@ import collections
 from utils import KnownException, FloatToInt
 
 class GameState(Enum):
- Preflop=1
- Flop=2
- Turn=3
- River=4
+ Preflop=0
+ Flop=1
+ Turn=2
+ River=3
 
 FirstLine = re.compile(r"PokerStars Hand \#(\d+): +Hold'em No Limit \((.+)\).*\[(\d{4}\/\d{2}\/\d{2} \d{1,2}\:\d{1,2}\:\d{1,2}) ([A-Z]+)\].*")
 
@@ -51,6 +51,8 @@ RaisesLine = re.compile(r"(.+): raises [^\d.]*([\d.]+) to [^\d.]*([\d.]+)( and i
 UncalledBetLine = re.compile(r"Uncalled bet \([^\d.]*([\d.]+)\) returned to (.+)")
 
 SummaryLine = re.compile(r"\*\*\* SUMMARY \*\*\*")
+
+TotalPotLine = re.compile(r"Total pot [^\d.]*([\d.]+).*")
 
 
 # See game_record_attrib_desc.txt for attribute description
@@ -149,6 +151,18 @@ class GameRecord:
    self.AssertEqualBets()
 
   del self.index_in_pos
+
+  #JUSTATEMP
+  while self.ln < len(self.lines):
+   m = TotalPotLine.match(self.lines[self.ln])
+   if m is not None:
+    amount = FloatToInt(m.group(1))
+    tbets = sum([self.bet[x] for x in self.players])
+    if amount != tbets:
+     print("DISCREPANCY", amount, tbets)
+     assert False
+    break
+   self.ln += 1
 
   
  def MatchMoveLine(self):
@@ -343,8 +357,10 @@ class GameRecord:
    self.in_chips[player] -= amount
    if player == self.players[0]:
     self.sb_found = True
-   else:
-    raise KnownException("Forced small blind bet")
+   #JUSTATEMP - UNCOMMENT
+   #else:
+    #JUSTATEMP - UNCOMMENT
+    #raise KnownException("Forced small blind bet")
    return True
    
   m = BigBlindLine.match(self.lines[self.ln])
@@ -359,8 +375,10 @@ class GameRecord:
    self.in_chips[player] -= amount
    if player == self.players[1]:
     self.bb_found = True
-   else:
-    raise KnownException("Forced big blind bet")
+   #JUSTATEMP - UNCOMMENT
+   #else:
+    #JUSTATEMP - uncomment
+    #raise KnownException("Forced big blind bet")
    return True
 
   m = BothBlindsLine.match(self.lines[self.ln])
