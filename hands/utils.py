@@ -16,7 +16,7 @@ def ProcessRecordFile(fn: str, org_file: str):
  """
  Processes a text file containing hands. Returns a list of GameRecord objects
  """
- #print(f"Processing {fn} from {org_file}")
+ print(f"Processing {fn} from {org_file}")
  bad_error_count = 0
  known_error_count = 0
 

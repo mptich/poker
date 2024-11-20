@@ -123,7 +123,7 @@ class GameRecord:
   if self.in_progress:
    self.MatchFlopLine()
    self.ln += 1
-   self.index_in_pos = 0
+   self.index_in_pos = 0 if len(self.players) > 2 else 1
    while self.MatchMoveLine():
     self.ln += 1
    self.AssertEqualBets()
@@ -131,7 +131,7 @@ class GameRecord:
   if self.in_progress:
    self.MatchTurnLine()
    self.ln += 1
-   self.index_in_pos = 0
+   self.index_in_pos = 0 if len(self.players) > 2 else 1
    while self.MatchMoveLine():
     self.ln += 1
    self.AssertEqualBets()
@@ -139,7 +139,7 @@ class GameRecord:
   if self.in_progress:
    self.MatchRiverLine()
    self.ln += 1
-   self.index_in_pos = 0
+   self.index_in_pos = 0 if len(self.players) > 2 else 1
    while self.MatchMoveLine():
     self.ln += 1
    self.AssertEqualBets()
@@ -149,12 +149,6 @@ class GameRecord:
   
  def MatchMoveLine(self):
   self.SkipWaste()
-
-  #JUSTATEMP START
-  print("ln", self.ln)
-  print("active", self.active_pos)
-  print(self.index_in_pos)
-  #JUSTATEMP END
 
   m = FoldsLine.match(self.lines[self.ln]) 
   if m is not None:
@@ -204,6 +198,8 @@ class GameRecord:
    self.bet[player] += amount
    assert self.in_chips[player] >= amount
    self.in_chips[player] -= amount
+   #JUSTATEMP
+   print("uuuu", player, self.current_bet, self.bet[player], self.in_chips[player])
    assert (self.bet[player] == self.current_bet) or \
     ((self.bet[player] <= self.current_bet) and (self.in_chips[player] == 0.))
    # m.group(3) is all-in
@@ -327,8 +323,6 @@ class GameRecord:
    indx += 1
   self.active_pos = list(range(player_count))
   self.all_in_pos = []
-  #JUSTATEMP
-  print("PLAYERS", self.players)
    
   del self.parsed_players_info
 
@@ -337,22 +331,38 @@ class GameRecord:
   self.SkipWaste()
   m = SmallBlindLine.match(self.lines[self.ln])
   if m is not None:
-   assert m.group(1) in self.players
-   assert FloatToInt(m.group(2)) == self.sb_fee
-   assert not self.bet[m.group(1)]
-   self.bet[m.group(1)] = self.sb_fee
-   if m.group(1) == self.players[0]:
+   player = m.group(1)
+   amount = FloatToInt(m.group(2))
+   assert player in self.players
+   assert amount == self.sb_fee
+   assert not self.bet[player]
+   self.bet[player] = amount
+   assert self.in_chips[player] >= amount
+   self.in_chips[player] -= amount
+   if player == self.players[0]:
     self.sb_found = True
+   #JUSTATEMP START
+   else:
+    print("SMALL BL FORCED", player, self.ln)
+   #JUSTATEMP END
    return True
    
   m = BigBlindLine.match(self.lines[self.ln])
   if m is not None:
-   assert m.group(1) in self.players
-   assert FloatToInt(m.group(2)) == self.bb_fee
-   assert not self.bet[m.group(1)]
-   self.bet[m.group(1)] = self.bb_fee
-   if m.group(1) == self.players[1]:
+   player = m.group(1)
+   amount = FloatToInt(m.group(2))
+   assert player in self.players
+   assert amount == self.bb_fee
+   assert not self.bet[player]
+   self.bet[player] = amount
+   assert self.in_chips[player] >= amount
+   self.in_chips[player] -= amount
+   if player == self.players[1]:
     self.bb_found = True
+   #JUSTATEMP START
+   else:
+    print("BIG BL FORCED", player, self.ln)
+   #JUSTATEMP END
    return True
 
   m = BothBlindsLine.match(self.lines[self.ln])
