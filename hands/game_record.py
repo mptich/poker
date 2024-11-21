@@ -13,6 +13,7 @@ class GameState(Enum):
 
 DateTimeString = r"(\d{4}\/\d{2}\/\d{2} \d{1,2}\:\d{1,2}\:\d{1,2}) ([A-Z]+)"
 
+
 FirstLine = re.compile(r"PokerStars Hand \#(\d+): +Hold'em No Limit \((.+)\) - " + DateTimeString + r"( \[" + DateTimeString + r"\])?")
 
 SBBBDict = {"$0.50/$1.00 USD": ("USD", 0.5, 1.),
@@ -53,6 +54,8 @@ RiverLine = re.compile(r"\*\*\* RIVER \*\*\* \[(.{2}) (.{2}) (.{2}) (.{2})\] \[(
 FirstFlopLine = re.compile(r"\*\*\* FIRST FLOP.*") 
 FirstTurnLine = re.compile(r"\*\*\* FIRST TURN.*")
 FirstRiverLine = re.compile(r"\*\*\* FIRST RIVER.*")
+ShowDownLine = re.compile(r"\*\*\* SHOW DOWN \*\*\*")
+SummaryLine = re.compile(r"\*\*\* SUMMARY \*\*\*")
 
 # Moves
 FoldsLine = re.compile(r"(.+): folds")
@@ -62,9 +65,12 @@ CallsLine = re.compile(r"(.+): calls [^\d.]*([\d.]+)( and is all-in)?")
 RaisesLine = re.compile(r"(.+): raises [^\d.]*([\d.]+) to [^\d.]*([\d.]+)( and is all-in)?")
 UncalledBetLine = re.compile(r"Uncalled bet \([^\d.]*([\d.]+)\) returned to (.+)")
 
-SummaryLine = re.compile(r"\*\*\* SUMMARY \*\*\*")
+CollectedLine = re.compile(r"(.+) collected [^\d.]*([\d.]+) from pot")
+ShowsLine = re.compile(r"(.+): shows \[(.{2}) (.{2})\] \((.+)\)")
+MucksLine = re.compile(r"(.+): mucks hand")
+DoesNotShowLine = re.compile(r"(.+): doesn\'t show hand")
 
-TotalPotLine = re.compile(r"Total pot [^\d.]*([\d.]+).*")
+TotalPotLine = re.compile(r"Total pot [^\d.]*([\d.]+) \| Rake [^\d.]*([\d.]+)")
 
 
 # See game_record_attrib_desc.txt for attribute description
@@ -170,6 +176,19 @@ class GameRecord:
    self.AssertEqualBets()
 
   del self.index_in_pos
+
+  players_left = len(self.all_in_pos) + len(self.active_pos)
+  assert players_left
+  
+  if players_left >= 2:
+   self.MatchShowDownLine()
+   self.ln += 1
+  while self.MatchShowDownContent():
+   self.ln += 1
+
+  self.MatchSummaryLine()
+  self.ln += 1
+  self.MatchTotalPotLine()
 
   #JUSTATEMP START
   while self.ln < len(self.lines):
@@ -485,6 +504,24 @@ class GameRecord:
   self.communal += [m.group(5)]
   self.state = GameState.River
 
+
+ def MatchShowDownLine(self):
+  m = ShowDownLine.match(self.lines[self.ln])
+  assert m is not None
+  
+
+ def MatchShowDownContent(self):
+  players_left = len(self.all_in_pos) + len(self.active_pos)
+  assert players_left
+
+  m = ShowsHandLine.match(self.lines[self.ln])
+  if m is not None:
+   assert players_left >= 2
+   player = m.group(1)
+   player_index = self.players.index(player)
+   assert (player_index in self.all_in_pos) or (player_index in self.active_pos)
+   combination = m.group(4)  
+   PRODOLZHIT'
 
  def GenerateUtcTimestamp(self, tstr, tzstr):
   tz = pytz.timezone(tzstr)
