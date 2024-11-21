@@ -11,10 +11,18 @@ class GameState(Enum):
  Turn=2
  River=3
 
-FirstLine = re.compile(r"PokerStars Hand \#(\d+): +Hold'em No Limit \((.+)\).*\[(\d{4}\/\d{2}\/\d{2} \d{1,2}\:\d{1,2}\:\d{1,2}) ([A-Z]+)\].*")
+DateTimeString = r"(\d{4}\/\d{2}\/\d{2} \d{1,2}\:\d{1,2}\:\d{1,2}) ([A-Z]+)"
+
+FirstLine = re.compile(r"PokerStars Hand \#(\d+): +Hold'em No Limit \((.+)\) - " + DateTimeString + r"( \[" + DateTimeString + r"\])?")
 
 SBBBDict = {"$0.50/$1.00 USD": ("USD", 0.5, 1.),
-         "$1.00/$2.00 USD": ("USD", 1., 2.)}
+         "$1/$2 USD": ("USD", 1., 2.),
+         "$2.50/$5.00 USD": ("USD", 2.50, 5.),
+         "$3/$6 USD": ("USD", 3., 6.),
+         "$5/$10 USD": ("USD", 5., 10.),
+         "$10/$20 USD": ("USD", 10., 20.),
+         "$25/$50 USD": ("USD", 25., 50.),
+         "$50/$100 USD": ("USD", 50., 100.)}
 
 TimeZoneDict = {"ET": "US/Eastern"}
 
@@ -27,12 +35,14 @@ JoinsTheTableLine = re.compile(r"(.+) joins the table at seat \#\d+")
 LeavesTheTableLine = re.compile(r"(.+) leaves the table")
 TimedOutLine = re.compile(r"(.+) has timed out.*")
 ConnectedLine = re.compile(r"(.+) is (dis)?connected.*")
+AllowedToPlayLine = re.compile(r"(.+) will be allowed to play.*")
 
 PlayerLine = re.compile(r"Seat (\d+): (.+) \([^\d.]*([\d.]+) in chips\)")
 
 SmallBlindLine = re.compile(r"(.+)\: posts small blind [^\d.]*([\d.]+)")
 BigBlindLine = re.compile(r"(.+)\: posts big blind [^\d.]*([\d.]+)")
 BothBlindsLine = re.compile(r"(.+): posts small \& big blinds [^\d.]*([\d.]+)")
+AnteLine = re.compile(r"(.+)\: posts the ante [^\d.]*([\d.]+)")
 
 HoleCardsLine = re.compile(r"\*\*\* HOLE CARDS \*\*\*")
 FlopLine = re.compile(r"\*\*\* FLOP \*\*\* \[(.{2}) (.{2}) (.{2})\]")
@@ -66,8 +76,8 @@ class GameRecord:
   pass
 
 
- WasteLines = [([SittingOutLine, SitsOutLine, JoinsTheTableLine],
-  ProcessPerUserWasteLine),
+ WasteLines = [([SittingOutLine, SitsOutLine, JoinsTheTableLine,
+  AllowedToPlayLine], ProcessPerUserWasteLine),
   ([TimedOutLine, ConnectedLine, LeavesTheTableLine], ProcessIgnoreWasteLine)]
 
 
@@ -110,12 +120,18 @@ class GameRecord:
    self.ln += 1
   self.ProcessPlayers()
 
+  self.ante = 0
   self.sb_found = self.bb_found = False
   while self.MatchBlindsLine():
    self.ln += 1
   assert self.sb_found and self.bb_found
   del self.sb_found
   del self.bb_found
+  if self.ante:
+   # Ante was used. Make sure all players has paid it
+   assert len(self.ante_players) == len(self.players)
+   del self.ante_players
+  del self.ante
   self.current_bet = self.bb_fee
 
   self.MatchHoleCardsLine()
@@ -290,14 +306,18 @@ class GameRecord:
   m = FirstLine.match(self.lines[self.ln])
   assert m is not None
   self.hand_number = int(m.group(1))
-  assert m.group(2) in SBBBDict
   tup = SBBBDict[m.group(2)]
   self.currency = tup[0]
   self.sb_fee = FloatToInt(tup[1])
   self.bb_fee = FloatToInt(tup[2])
 
-  assert m.group(4) in TimeZoneDict
-  self.GenerateUtcTimestamp(m.group(3), TimeZoneDict[m.group(4)])
+  if m.group(5) is not None:
+   dtstamp = m.group(6)
+   tzone = m.group(7)
+  else:
+   dtstamp = m.group(3)
+   tzone = m.group(4)
+  self.GenerateUtcTimestamp(dtstamp, TimeZoneDict[tzone])
 
 
  def MatchSecondLine(self):
@@ -388,6 +408,22 @@ class GameRecord:
    self.donations += self.sb_fee
    assert self.in_chips[player] >= amount
    self.in_chips[player] -= amount
+   return True
+
+  m = AnteLine.match(self.lines[self.ln])
+  if m is not None:
+   amount = FloatToInt(m.group(2))
+   if self.ante == 0:
+    self.ante = amount
+    self.ante_players = set()
+   else:
+    assert amount == self.ante
+   player = m.group(1)
+   assert player in self.players
+   self.ante_players.add(player)
+   self.donations += self.ante
+   assert self.in_chips[player] >= self.ante
+   self.in_chips[player] -= self.ante
    return True
 
   return False

@@ -14,7 +14,7 @@ def FloatToInt(fl_str: str):
 # Place it here to avoid circular dependecies
 from game_record import GameRecord
 
-def ProcessRecordFile(fn: str, org_file: str):
+def ProcessRecordFile(fn: str, org_file: str, dbg_reraise=False):
  """
  Processes a text file containing hands. Returns a list of GameRecord objects
  """
@@ -32,10 +32,12 @@ def ProcessRecordFile(fn: str, org_file: str):
     f"from {org_file}")
    known_errors[str(ke)] += 1
    return None
-  except Exception as e:
+  except AssertionError as e:
    print(f"ERROR {e} at line {h.ln+first_line} in {fn} from {org_file}") 
    traceback.print_exc(file=sys.stdout)
    bad_error_count += 1
+   if dbg_reraise:
+    raise e
    return None
   return h
 

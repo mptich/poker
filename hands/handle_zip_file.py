@@ -18,10 +18,12 @@ def ParseArgs():
      required=True)
     parser.add_argument('-n', '--dont_erase',
      help="Do not erase temp folder (for debugging)", action='store_true')
+    parser.add_argument('-r', '--reraise',
+     help="Reraise bad errors (for debugging)", action='store_true')
     args = parser.parse_args()
     return args
 
-def ProcessZipFile(input_file, folder, erase_temp=True):
+def ProcessZipFile(input_file, folder, erase_temp=True, dbg_reraise=False):
  temp_folder = os.path.join(args.folder, 'temp')
  os.mkdir(temp_folder)
 
@@ -40,7 +42,8 @@ def ProcessZipFile(input_file, folder, erase_temp=True):
 
  for ind, fn in enumerate(glob.glob(os.path.join(temp_folder, "*"))):
   new_hands, known_errors, bad_error_count = \
-   utils.ProcessRecordFile(fn=fn, org_file=args.input_file)
+   utils.ProcessRecordFile(fn=fn, org_file=args.input_file,
+    dbg_reraise=dbg_reraise)
   hands += new_hands
   total_known_errors.update(known_errors)
   total_bad_errors += bad_error_count
@@ -52,7 +55,7 @@ def ProcessZipFile(input_file, folder, erase_temp=True):
 if __name__ == '__main__':
  args = ParseArgs()
  hands, known_errors, bad_errors = ProcessZipFile(args.input_file, args.folder,
-  erase_temp=not args.dont_erase)
+  erase_temp=not args.dont_erase, dbg_reraise=args.reraise)
  print(f"The following found in {args.input_file}")
  print(f"{len(hands)} hands, {bad_errors} bad errors\nKnown errors:")
  for k,v in known_errors.items():
