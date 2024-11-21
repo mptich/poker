@@ -1,5 +1,7 @@
 *active_pos (list) - positions of the remaining active players (0 position is an SB) - those that have not falded and have not all-inned
 *all_in_pos (list) - positions of the players that are in all-in
+*ante (int) - temporary attribute. set to the ante amount
+*ante_players (set) - temporary attribute. Set of the players who paid their ante
 *bb_fee (int) - BB amount
 *bb_found (bool) - temporary attribute. Big Blind player found in blinds' lines
 *bet (default dict) - player name -> current amount in the pot
@@ -7,6 +9,7 @@
 *communal (list) - list of the currently available communal cards
 *currency (str) - currensy used in the game
 *current_bet (int) - current bet everybody has to match
+*donations (int) - additional money that are not reflected in 'bet' attribute
 *hand_number (int) - number of the game, follows "#" in the first game line
 *in_chips (dict) - player name -> amount in chips
 *index_in_pos (int) - temporary attribute. Current index in 'players_pos'
