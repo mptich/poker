@@ -5,12 +5,6 @@ import collections
 class KnownException(Exception):
  pass
 
-def FloatToInt(fl_str: str):
- """
- To convert money to integer number
- """
- return round(float(fl_str) * 1000)
-
 # Place it here to avoid circular dependecies
 from game_record import GameRecord
 

@@ -3,7 +3,7 @@ from datetime import datetime
 import pytz
 from enum import Enum
 import collections
-from utils import KnownException, FloatToInt
+from utils import KnownException
 
 class GameState(Enum):
  Preflop=0
@@ -25,6 +25,8 @@ SBBBDict = {"$0.50/$1.00 USD": ("USD", 0.5, 1.),
          "$50/$100 USD": ("USD", 50., 100.)}
 
 TimeZoneDict = {"ET": "US/Eastern"}
+
+CurrencyParams = {"USD": (1000., 2)}
 
 SecondLine = re.compile(r"Table .* Seat \#(\d+) is the button")
 
@@ -121,6 +123,8 @@ class GameRecord:
   self.ProcessPlayers()
 
   self.ante = 0
+  self.contribs = []
+  self.moves = [[],[],[],[]]
   self.sb_found = self.bb_found = False
   while self.MatchBlindsLine():
    self.ln += 1
@@ -131,7 +135,6 @@ class GameRecord:
    # Ante was used. Make sure all players has paid it
    assert len(self.ante_players) == len(self.players)
    del self.ante_players
-  del self.ante
   self.current_bet = self.bb_fee
 
   self.MatchHoleCardsLine()
@@ -172,7 +175,7 @@ class GameRecord:
   while self.ln < len(self.lines):
    m = TotalPotLine.match(self.lines[self.ln])
    if m is not None:
-    amount = FloatToInt(m.group(1))
+    amount = self.MoneyToInt(m.group(1))
     tbets = sum([self.bet[x] for x in self.players])
     if amount != tbets + self.donations:
      print("DISCREPANCY", amount, tbets)
@@ -189,6 +192,7 @@ class GameRecord:
   if m is not None:
    index = self.players.index(m.group(1))
    assert self.players[self.active_pos[self.index_in_pos]] == m.group(1)
+   self.AddMove(self.active_pos[self.index_in_pos], 'fo')
    self.active_pos.pop(self.index_in_pos)
    if self.active_pos:
     self.index_in_pos %= len(self.active_pos)
@@ -199,6 +203,7 @@ class GameRecord:
   m = ChecksLine.match(self.lines[self.ln])
   if m is not None:
    assert self.players[self.active_pos[self.index_in_pos]] == m.group(1)
+   self.AddMove(self.active_pos[self.index_in_pos], 'ch')
    self.index_in_pos += 1
    self.index_in_pos %= len(self.active_pos)
    return True
@@ -206,7 +211,8 @@ class GameRecord:
   m = BetsLine.match(self.lines[self.ln])
   if m is not None:
    assert self.players[self.active_pos[self.index_in_pos]] == m.group(1)
-   amount = FloatToInt(m.group(2))
+   amount = self.MoneyToInt(m.group(2))
+   self.AddMove(self.active_pos[self.index_in_pos], 'be', amount)
    player = m.group(1)
    self.bet[player] += amount
    assert self.bet[player] > self.current_bet
@@ -228,7 +234,8 @@ class GameRecord:
   m = CallsLine.match(self.lines[self.ln])
   if m is not None:
    assert self.players[self.active_pos[self.index_in_pos]] == m.group(1)
-   amount = FloatToInt(m.group(2))
+   amount = self.MoneyToInt(m.group(2))
+   self.AddMove(self.active_pos[self.index_in_pos], 'ca', amount)
    player = m.group(1)
    self.bet[player] += amount
    assert self.in_chips[player] >= amount
@@ -250,11 +257,12 @@ class GameRecord:
   m = RaisesLine.match(self.lines[self.ln])
   if m is not None:
    assert self.players[self.active_pos[self.index_in_pos]] == m.group(1)
-   by_amount = FloatToInt(m.group(2))
-   #to_amount = FloatToInt(m.group(3))
+   by_amount = self.MoneyToInt(m.group(2))
+   #to_amount = self.MoneyToInt(m.group(3))
    player = m.group(1)
    bet = self.current_bet + by_amount
    amount = bet - self.bet[player]
+   self.AddMove(self.active_pos[self.index_in_pos], 'ra', amount)
    self.current_bet = self.bet[player] = bet
    assert self.in_chips[player] >= amount
    self.in_chips[player] -= amount
@@ -272,8 +280,9 @@ class GameRecord:
 
   m = UncalledBetLine.match(self.lines[self.ln])
   if m is not None:
-   amount = FloatToInt(m.group(1))
+   amount = self.MoneyToInt(m.group(1))
    player = m.group(2)
+   self.AddMove(self.players.index(player), 'un', amount)
    assert self.bet[player] >= amount
    assert self.bet[player] == self.current_bet
    self.bet[player] -= amount
@@ -308,8 +317,8 @@ class GameRecord:
   self.hand_number = int(m.group(1))
   tup = SBBBDict[m.group(2)]
   self.currency = tup[0]
-  self.sb_fee = FloatToInt(tup[1])
-  self.bb_fee = FloatToInt(tup[2])
+  self.sb_fee = self.MoneyToInt(tup[1])
+  self.bb_fee = self.MoneyToInt(tup[2])
 
   if m.group(5) is not None:
    dtstamp = m.group(6)
@@ -333,7 +342,7 @@ class GameRecord:
    return False
   seat = int(m.group(1))
   assert seat not in self.parsed_players_info
-  self.parsed_players_info[seat] = (m.group(2), FloatToInt(m.group(3)))
+  self.parsed_players_info[seat] = (m.group(2), self.MoneyToInt(m.group(3)))
   return True
 
 
@@ -370,7 +379,7 @@ class GameRecord:
   m = SmallBlindLine.match(self.lines[self.ln])
   if m is not None:
    player = m.group(1)
-   amount = FloatToInt(m.group(2))
+   amount = self.MoneyToInt(m.group(2))
    assert player in self.players
    assert amount == self.sb_fee
    assert self.in_chips[player] >= amount
@@ -381,12 +390,13 @@ class GameRecord:
     self.bet[player] = amount
    else:
     self.donations += amount
+    self.contribs.append(f"{self.players.index(player)}s")
    return True
    
   m = BigBlindLine.match(self.lines[self.ln])
   if m is not None:
    player = m.group(1)
-   amount = FloatToInt(m.group(2))
+   amount = self.MoneyToInt(m.group(2))
    assert player in self.players
    assert amount == self.bb_fee
    assert not self.bet[player]
@@ -395,24 +405,29 @@ class GameRecord:
    self.in_chips[player] -= amount
    if player == self.players[1]:
     self.bb_found = True
+   else:
+    self.contribs.append(f"{self.players.index(player)}b")
    return True
 
   m = BothBlindsLine.match(self.lines[self.ln])
   if m is not None:
    player = m.group(1)
-   amount = FloatToInt(m.group(2))
+   amount = self.MoneyToInt(m.group(2))
    assert player in self.players
+   # He is neither SB nor BB
+   assert self.players.index(player) >= 2
    assert amount == self.sb_fee + self.bb_fee
    assert not self.bet[player]
    self.bet[player] = self.bb_fee
    self.donations += self.sb_fee
    assert self.in_chips[player] >= amount
    self.in_chips[player] -= amount
+   self.contribs.append(f"{self.players.index(player)}sb")
    return True
 
   m = AnteLine.match(self.lines[self.ln])
   if m is not None:
-   amount = FloatToInt(m.group(2))
+   amount = self.MoneyToInt(m.group(2))
    if self.ante == 0:
     self.ante = amount
     self.ante_players = set()
@@ -475,4 +490,23 @@ class GameRecord:
   tz = pytz.timezone(tzstr)
   dt = datetime.strptime(tstr, "%Y/%m/%d %H:%M:%S").replace(tzinfo=tz)
   self.timestamp = dt.astimezone(pytz.utc)
+
+
+ def AddMove(self, player_index, move, amount=None):
+  if amount is None:
+   self.moves[self.state.value].append(f"{player_index}{move}")
+  else:
+   amount_str = self.IntToMoney(amount)
+   self.moves[self.state.value].append(f"{player_index}{amount_str}")
+
+
+ def MoneyToInt(self, amount_str: str):
+  multiplier, _ = CurrencyParams[self.currency]
+  return round(float(amount_str) * multiplier)
+
+
+ def IntToMoney(self, amount: int):
+  multiplier, precision = CurrencyParams[self.currency]
+  formatter = f"%0.{precision}f"
+  return formatter % (float(amount) / multiplier)
 
