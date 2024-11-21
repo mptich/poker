@@ -7,13 +7,15 @@ Fields:
 4. Game type (Hold'em No Limit)
 5. Currency (USD)
 6. SM/BB 
-7. Slash separated active players, starting with Small Blind
-8. Slash separated amounts in chips for each player
-9. Slash separated communal cards (up to 5)
-10. Slash separated moves, preflop
-11. Flop moves
-12. Turn moves
-13. River moves
-14. Shown cards
-15. Pot / rake
-16. Players and their gains (losses)
+7. Ante size
+8. Slash separated players, starting with Small Blind
+9. Slash separated amounts in chips for each player
+10. Additional contributions of non-blinds: <player index>{s|b|sb}
+11. Slash separated communal cards (up to 5)
+12. Slash separated moves, preflop <player index>{fo|ch|be|ca|ra|un}[amount]
+13. Flop moves
+14. Turn moves
+15. River moves
+16. Shown cards <player index>5sTc or mucks <player index>m
+17. Pot / rake
+18. Players and their gains (losses if negative)
