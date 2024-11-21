@@ -8,16 +8,18 @@ class KnownException(Exception):
 # Place it here to avoid circular dependecies
 from game_record import GameRecord
 
-def ProcessRecordFile(fn: str, org_file: str, dbg_reraise=False):
+def ProcessRecordFile(fn: str, org_file: str, assert_reraise=False,
+ other_reraise=True):
  """
  Processes a text file containing hands. Returns a list of GameRecord objects
  """
  print(f"Processing {fn} from {org_file}")
- bad_error_count = 0
+ error_count = 0
+ assert_count = 0
  known_errors = collections.defaultdict(int)
 
  def __GenerateHand(lines, first_line):
-  nonlocal fn, org_file, bad_error_count, known_errors
+  nonlocal fn, org_file, error_count, assert_count, known_errors
   h = GameRecord()
   try:
    h.ParseLines(lines)
@@ -26,13 +28,21 @@ def ProcessRecordFile(fn: str, org_file: str, dbg_reraise=False):
     f"from {org_file}")
    known_errors[str(ke)] += 1
    return None
-  except AssertionError as e:
-   print(f"ERROR {e} at line {h.ln+first_line} in {fn} from {org_file}") 
+  except AssertionError as ae:
+   print(f"ASSERT {ae} at line {h.ln+first_line} in {fn} from {org_file}") 
    traceback.print_exc(file=sys.stdout)
-   bad_error_count += 1
-   if dbg_reraise:
+   assert_count += 1
+   if assert_reraise:
+    raise ae
+   return None
+  except Exception as e:
+   print(f"ERROR {e} at line {h.ln+first_line} in {fn} from {org_file}")
+   traceback.print_exc(file=sys.stdout)
+   error_count += 1
+   if other_reraise:
     raise e
    return None
+
   return h
 
  hands = []
@@ -63,5 +73,5 @@ def ProcessRecordFile(fn: str, org_file: str, dbg_reraise=False):
   if h is not None:
    hands.append(h)
 
- return hands, known_errors, bad_error_count 
+ return hands, known_errors, assert_count, error_count 
     

@@ -6,6 +6,8 @@
 *bb_found (bool) - temporary attribute. Big Blind player found in blinds' lines
 *bet (default dict) - player name -> current amount in the pot
 *button (int) - seat of the button
+*cashed_out (set) - players that have cashed out
+*combination (dict) - player -> combination of cards
 *communal (list) - list of the currently available communal cards
 *contribs (list) - SB, BB, or SB+BB fees paind by non-blinds
 *currency (str) - currensy used in the game
@@ -14,6 +16,7 @@
 *hand_number (int) - number of the game, follows "#" in the first game line
 *in_chips (dict) - player name -> amount in chips
 *index_in_pos (int) - temporary attribute. Current index in 'players_pos'
+*initial_in_chips (dict) - player name -> how much he had originally
 *lines (list) - list of lines for this game from a game file
 *ln (int) - current line number in 'lines'
 *moves (list of lists) - consists of 4 lists: 0 - list of preflop moves etc
@@ -22,5 +25,7 @@
 *sb_fee (int) - SB amount
 *sb_found (bool) - temporary attribute. Small Blind player found in blinds' lines
 *seat (dict) - player name -> seat number
+*shown (dict) - player -> what cards have been shown
 *state (GameState enum) - state of the betting process
 *timestamp (datetime) - date and time of the game in UTC
+*winnings (dict) - player -> gains from the pot. Ignores cashing out

@@ -65,12 +65,23 @@ CallsLine = re.compile(r"(.+): calls [^\d.]*([\d.]+)( and is all-in)?")
 RaisesLine = re.compile(r"(.+): raises [^\d.]*([\d.]+) to [^\d.]*([\d.]+)( and is all-in)?")
 UncalledBetLine = re.compile(r"Uncalled bet \([^\d.]*([\d.]+)\) returned to (.+)")
 
+# Showdown lines
 CollectedLine = re.compile(r"(.+) collected [^\d.]*([\d.]+) from pot")
 ShowsLine = re.compile(r"(.+): shows \[(.{2}) (.{2})\] \((.+)\)")
 MucksLine = re.compile(r"(.+): mucks hand")
 DoesNotShowLine = re.compile(r"(.+): doesn\'t show hand")
+CashedOutLine = re.compile(r"(.+) cashed out the hand for .*")
 
+# Summary lines
 TotalPotLine = re.compile(r"Total pot [^\d.]*([\d.]+) \| Rake [^\d.]*([\d.]+)")
+BoardLine = re.compile(r"Board \[.+\]")
+SummarySeatLine = re.compile(r"Seat (\d+): (.+)( \([button|small blind|big blind]\))? (.+)")
+SummarySeatIgnoreLine = re.compile(r"Seat (\d+): (.+)")
+SummarySeatMuckedLine = re.compile(r"mucked.*")
+SummarySeatFoldedLine = re.compile(r"folded.*")
+SummarySeatShowedLine = re.compile(r"showed \[.+\] and (.+)")
+SummarySeatShowedLostLine = re.compile(r"lost.*")
+SummarySeatShowedWonLine = re.compile(r"won.*")
 
 
 # See game_record_attrib_desc.txt for attribute description
@@ -117,6 +128,8 @@ class GameRecord:
   self.lines = lines
   self.ln = 0
   self.players = []
+  self.winnings = {}
+  self.cashed_out = set()
   self.MatchFirstLine()
 
   self.ln = 1
@@ -188,7 +201,8 @@ class GameRecord:
 
   self.MatchSummaryLine()
   self.ln += 1
-  self.MatchTotalPotLine()
+  while (self.ln < len(self.lines)) and self.MatchSummaryContent():
+   self.ln += 1
 
   #JUSTATEMP START
   while self.ln < len(self.lines):
@@ -374,6 +388,7 @@ class GameRecord:
   bindx = seats.index(self.button)
 
   self.in_chips = {}
+  self.initial_in_chips = {}
   self.seat = {}
   self.bet = collections.defaultdict(int)
   self.donations = 0 
@@ -384,7 +399,7 @@ class GameRecord:
    tup = self.parsed_players_info[seats[indx]]
    name = tup[0]
    self.players.append(name)
-   self.in_chips[name] = tup[1] 
+   self.initial_in_chips[name] = self.in_chips[name] = tup[1] 
    self.seat[name] = seats[indx]
    indx += 1
   self.active_pos = list(range(player_count))
@@ -508,20 +523,64 @@ class GameRecord:
  def MatchShowDownLine(self):
   m = ShowDownLine.match(self.lines[self.ln])
   assert m is not None
+
+
+ def MatchSummaryLine():
+  m = SummaryLine.match(self.lines[self.ln])
+  assert m is not None
   
 
  def MatchShowDownContent(self):
   players_left = len(self.all_in_pos) + len(self.active_pos)
   assert players_left
 
-  m = ShowsHandLine.match(self.lines[self.ln])
+  m = ShowsLine.match(self.lines[self.ln])
   if m is not None:
    assert players_left >= 2
    player = m.group(1)
-   player_index = self.players.index(player)
-   assert (player_index in self.all_in_pos) or (player_index in self.active_pos)
-   combination = m.group(4)  
-   PRODOLZHIT'
+   player_ind = self.players.index(player)
+   assert (player_ind in self.all_in_pos) or (player_ind in self.active_pos)
+   self.shown[player] = m.group(2) + m.group(3)
+   self.combination[player] = m.group(4)
+   return True
+
+  m = MucksLine.match(self.lines[self.ln])
+  if m is not None:
+   assert players_left >= 2
+   player = m.group(1)
+   player_ind = self.players.index(player)
+   assert (player_ind in self.all_in_pos) or (player_ind in self.active_pos)
+   return True
+
+  m = DoesNotShowLine.match(self.lines[self.ln])
+  if m is not None:
+   assert players_left == 1
+   return True
+
+  m = CollectedLine.match(self.lines[self.ln])
+  if m is not None:
+   player = m.group(1)
+   player_ind = self.players.index(player)
+   assert (player_ind in self.active_pos) or (player_ind in self.all_in_pos)
+   amount = self.MoneyToInt(m.group(2))
+   self.in_chips[player] += amount
+   self.winnings[player] = amount
+   return True
+
+  m = CashedOutLine.match(self.lines[self.ln])
+  if m is not None:
+   player = m.group(1)
+   player_ind = self.players.index(player)
+   assert (player_ind in self.active_pos) or (player_ind in self.all_in_pos)
+   self.cashed_out.add(player)
+   return True
+
+  return False
+
+
+ def MatchSummaryContent():
+prodolzhit'
+
 
  def GenerateUtcTimestamp(self, tstr, tzstr):
   tz = pytz.timezone(tzstr)
@@ -534,7 +593,7 @@ class GameRecord:
    self.moves[self.state.value].append(f"{player_index}{move}")
   else:
    amount_str = self.IntToMoney(amount)
-   self.moves[self.state.value].append(f"{player_index}{amount_str}")
+   self.moves[self.state.value].append(f"{player_index}{move}{amount_str}")
 
 
  def MoneyToInt(self, amount_str: str):

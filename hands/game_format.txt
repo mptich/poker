@@ -16,6 +16,6 @@ Fields:
 13. Flop moves
 14. Turn moves
 15. River moves
-16. Shown cards <player index>5sTc or mucks <player index>m
+16. Shown cards <player index>5sTc<combination> or mucks <player index>m
 17. Pot / rake
 18. Players and their gains (losses if negative)

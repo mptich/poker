@@ -18,12 +18,15 @@ def ParseArgs():
      required=True)
     parser.add_argument('-n', '--dont_erase',
      help="Do not erase temp folder (for debugging)", action='store_true')
-    parser.add_argument('-r', '--reraise',
-     help="Reraise bad errors (for debugging)", action='store_true')
+    parser.add_argument('-a', '--assert_reraise',
+     help="Reraise assertions (for debugging)", action='store_true')
+    parser.add_argument('-o', '--other_dont_reraise',
+     help="Do not reraise other errors", action='store_true')
     args = parser.parse_args()
     return args
 
-def ProcessZipFile(input_file, folder, erase_temp=True, dbg_reraise=False):
+def ProcessZipFile(input_file, folder, erase_temp=True, assert_reraise=False,
+ other_reraise=True):
  temp_folder = os.path.join(args.folder, 'temp')
  os.mkdir(temp_folder)
 
@@ -38,26 +41,31 @@ def ProcessZipFile(input_file, folder, erase_temp=True, dbg_reraise=False):
 
  hands = []
  total_known_errors = collections.Counter()
- total_bad_errors = 0
+ assert_count = 0
+ error_count = 0
 
  for ind, fn in enumerate(glob.glob(os.path.join(temp_folder, "*"))):
-  new_hands, known_errors, bad_error_count = \
+  new_hands, known_errors, new_asserts, new_errors = \
    utils.ProcessRecordFile(fn=fn, org_file=args.input_file,
-    dbg_reraise=dbg_reraise)
+    assert_reraise=assert_reraise, other_reraise=other_reraise)
   hands += new_hands
   total_known_errors.update(known_errors)
-  total_bad_errors += bad_error_count
+  assert_count += new_asserts
+  error_count += new_errors
 
  if erase_temp:
   shutil.rmtree(temp_folder)
- return hands, total_known_errors, total_bad_errors
+ return hands, total_known_errors, assert_count, error_count
 
 if __name__ == '__main__':
  args = ParseArgs()
- hands, known_errors, bad_errors = ProcessZipFile(args.input_file, args.folder,
-  erase_temp=not args.dont_erase, dbg_reraise=args.reraise)
+ hands, known_errors, assert_count, error_count = \
+  ProcessZipFile(args.input_file, args.folder, erase_temp=not args.dont_erase,
+  assert_reraise=args.assert_reraise,
+  other_reraise=not args.other_dont_reraise)
  print(f"The following found in {args.input_file}")
- print(f"{len(hands)} hands, {bad_errors} bad errors\nKnown errors:")
+ print(f"{len(hands)} hands, {assert_count} asserts, {error_count} "\
+  f" errors\nKnown errors:")
  for k,v in known_errors.items():
   print(f"{k}: {v}")
 
