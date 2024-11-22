@@ -128,8 +128,9 @@ class GameRecord:
     return
    
 
- def __init__(self, file: str, start_line: int):
-  self.file = file
+ def __init__(self, text_file: str, org_file:str, start_line: int):
+  self.text_file = text_file
+  self.org_file = org_file
   self.start_line = start_line
 
 
@@ -137,10 +138,11 @@ class GameRecord:
   self.lines = lines
   self.ln = 0
   self.players = []
-  self.winnings = {}
+  self.winnings = collections.defaultdict(int)
   self.shown = {}
   self.combination = {}
   self.cashed_out = set()
+  self.muckers = set()
   self.MatchFirstLine()
 
   self.ln = 1
@@ -217,18 +219,6 @@ class GameRecord:
   while (self.ln < len(self.lines)) and self.MatchSummaryContent():
    self.ln += 1
 
-  #JUSTATEMP START
-  while self.ln < len(self.lines):
-   m = TotalPotLine.match(self.lines[self.ln])
-   if m is not None:
-    amount = self.MoneyToInt(m.group(1))
-    if amount != self.total_pot:
-     print("DISCREPANCY", amount, tbets)
-     assert False
-    break
-   self.ln += 1
-  #JUSTATEMP END
-
   
  def MatchMoveLine(self):
   self.SkipWaste()
@@ -286,7 +276,7 @@ class GameRecord:
    assert self.in_chips[player] >= amount
    self.in_chips[player] -= amount
    assert (self.bet[player] == self.current_bet) or \
-    ((self.bet[player] <= self.current_bet) and (self.in_chips[player] == 0.))
+    ((self.bet[player] <= self.current_bet) and (self.in_chips[player] == 0))
    # m.group(3) is all-in
    assert bool(self.in_chips[player]) == (m.group(3) is None)
    if self.in_chips[player]:
@@ -332,7 +322,7 @@ class GameRecord:
    assert self.bet[player] == self.current_bet
    self.bet[player] -= amount
    self.current_bet -= amount
-   if (self.in_chips[player] == 0.) and amount:
+   if (self.in_chips[player] == 0) and amount:
     # Move it back from all_in_pos to active_pos
     index = self.players.index(player)
     self.all_in_pos.remove(index)
@@ -568,6 +558,7 @@ class GameRecord:
    player = m.group(1)
    player_ind = self.players.index(player)
    assert (player_ind in self.all_in_pos) or (player_ind in self.active_pos)
+   self.muckers.add(player)
    return True
 
   m = DoesNotShowLine.match(self.lines[self.ln])
@@ -596,14 +587,57 @@ class GameRecord:
 
 
  def MatchSummaryContent(self):
-  m = TotalPotLine.match(self.lines[self.ln]
+  m = TotalPotLine.match(self.lines[self.ln])
   if m is not None:
-   rev_pot_elig = collections.defaultdict(set)
-   list(map(lambda x: rev_pot_elig[x[1]].add(x[0]), self.pot_elig.items()))
-   l = sorted(list(rev_pot_elig.keys))
-   prodolzhit'
+   assert self.pots[0] == self.MoneyToInt(m.group(1))
+   self.rake = self.MoneyToInt(m.group(4))
+   if len(self.pots) > 1:
+    assert m.group(2) is not None
+    assert m.captures(3)
+    side_pots = list(map(self.MoneyToInt, m.captures(3)))
+    assert self.MoneyToInt(m.group(2)) == self.pots[1] - self.rake
+    for ind,capt in enumerate(m.captures(3)):
+     assert self.MoneyToInt(capt) == self.pots[ind+2]
+   return True
+
+  m = BoardLine.match(self.lines[self.ln])
+  if m is not None:
+   return True
+
+  m = SummarySeatLine.match(self.lines[self.ln])
+  if m is not None:
+   seat = int(group(1))
+   player = m.group(2)
+   assert self.seat[player] == seat
+   action_str = m.group(3)
+   ret = self.MatchActionOfSeatLine(player, action_str)
+   assert ret
+   return True
+
+  # Should not get here
+  assert False
     
 
+ def MatchActionOfSeatLine(self, player, action_str)
+  m = SummarySeatMuckedLine.match(action_str)
+  if m is not None:
+   assert len(self.pot_elig) > 1
+   assert player in self.muckers
+   return True
+
+  m = SummarySeatFoldedLine.match(action_str)
+  if m is not None:
+   return True
+
+  m = SummarySeatShowedWonLine.match(action_str)
+  if m is not None:
+   assert len(self.pot_elig) > 1
+   amount = self.MoneyToInt(m.group(1))
+   elig = self.pot_elig[player]
+   assert (amount == elig) or (amount == elig-self.rake)
+   self.in_chips[player] += amount
+   self.winnings[player] += amount
+   
 
  def GenerateUtcTimestamp(self, tstr, tzstr):
   tz = pytz.timezone(tzstr)
@@ -621,12 +655,23 @@ class GameRecord:
     s += min(self.bet[p], bet)
    self.pot_elig[player] = s
 
-  self.total_pot = self.donations
+  pot = self.donations
   for p in self.players:
-   self.total_pot += self.bet[p]
+   pot += self.bet[p]
 
   for ind in self.active_pos:
-   self.pot_elig[self.players[ind]] = self.total_pot
+   self.pot_elig[self.players[ind]] = pot
+
+  # Now calculate all pots, including main and side ones, without the rake
+  # as we don't know it yet
+
+  self.pots = [pot]
+  l = sorted(list(set(self.pot_elig.values())))  
+  assert l[-1] == pot
+  if len(l) > 1:
+   self.pots.append(l[0])
+   for ind in range(len(l)-1):
+    self.pots.append(l[ind+1] - l[ind])
       
 
  def AddMove(self, player_index, move, amount=None):
@@ -638,6 +683,9 @@ class GameRecord:
 
 
  def MoneyToInt(self, amount_str: str):
+  """
+  Guaranteed to be positive
+  """
   if amount_str is None:
    return 0
   multiplier, _ = CurrencyParams[self.currency]
@@ -645,7 +693,11 @@ class GameRecord:
 
 
  def IntToMoney(self, amount: int):
+  negative = False
+  if amount < 0:
+   amount = -amount
+   negative = True
   multiplier, precision = CurrencyParams[self.currency]
-  formatter = f"%0.{precision}f"
+  formatter = ("-" if negative else "") + f"%0.{precision}f"
   return formatter % (float(amount) / multiplier)
 

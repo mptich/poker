@@ -20,14 +20,19 @@
 *lines (list) - list of lines for this game from a game file
 *ln (int) - current line number in 'lines'
 *moves (list of lists) - consists of 4 lists: 0 - list of preflop moves etc
+*muckers (set) - players that mucked the cards
+*org_file (str) - debugging attribute, original zip file name
 *parsed_players_info (dict) - temporary attribute. A dictionary of player's seat -> (player name, money in chips)
 *players (list) - names of players in the order, first element is a SB
 *pot_elig (dict) - player -> portion of the pot he is eligible for
+*pots (list of int) - total pot, followed by main and side pots if applicable
+*rake (int) - rake of the pot
 *sb_fee (int) - SB amount
 *sb_found (bool) - temporary attribute. Small Blind player found in blinds' lines
 *seat (dict) - player name -> seat number
 *shown (dict) - player -> what cards have been shown
+*start_line (int) - debugging attribute, starting line in the text file
 *state (GameState enum) - state of the betting process
+*text_file (str) - debugging attribute, text file name
 *timestamp (datetime) - date and time of the game in UTC
-*total_pot (int) - total money in the pot at the end of betting
 *winnings (dict) - player -> gains from the pot. Ignores cashing out

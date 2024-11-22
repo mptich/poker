@@ -12,6 +12,9 @@ def ProcessRecordFile(fn: str, org_file: str, assert_reraise=False,
  other_reraise=True):
  """
  Processes a text file containing hands. Returns a list of GameRecord objects
+ fn - path to the file
+ org_file - for informational purpose only. Preferably the path relative
+  to the base folder for all database files
  """
  print(f"Processing {fn} from {org_file}")
  error_count = 0
@@ -20,7 +23,7 @@ def ProcessRecordFile(fn: str, org_file: str, assert_reraise=False,
 
  def __GenerateHand(lines, first_line):
   nonlocal fn, org_file, error_count, assert_count, known_errors
-  h = GameRecord(fn, first_line)
+  h = GameRecord(fn, org_file, first_line)
   try:
    h.ParseLines(lines)
   except KnownException as ke:
