@@ -81,9 +81,9 @@ SummarySeatLine = re.compile(r"Seat (\d+): (.+)(?: \((?:button|small blind|big b
 SummarySeatIgnoreLine = re.compile(r"Seat (\d+): (.+)")
 SummarySeatMuckedLine = re.compile(r"mucked.*")
 SummarySeatFoldedLine = re.compile(r"folded.*")
-SummarySeatShowedWonLine = re.compile(r"showed \[.+\] and won \([^\d.]*([\d.]+\) with.*")
-SummarySeatShowedLostLine = re.compile(r"showed \[.+\] and lost with.*"))
-SummarySeatCollectedLine = re.compile(r"collected \([^\d.]*([\d.]+\)\)")
+SummarySeatShowedWonLine = re.compile(r"showed \[.+\] and won \([^\d.]*([\d.]+)\) with.*")
+SummarySeatShowedLostLine = re.compile(r"showed \[.+\] and lost with.*")
+SummarySeatCollectedLine = re.compile(r"collected \([^\d.]*([\d.]+)\)")
 
 
 # See game_record_attrib_desc.txt for attribute description
@@ -202,11 +202,6 @@ class GameRecord:
   del self.index_in_pos
 
   self.CalculatePotEligibility()
-  #JUSTATEMP START
-  if np.unique(np.array(list(self.pot_elig.values()))).shape[0] > 2:
-   print(f"LOOKHERE {self.start_line} {self.file}")
-   assert False
-  #JUSTATEMP END
 
   players_left = len(self.all_in_pos) + len(self.active_pos)
   assert players_left
@@ -601,7 +596,13 @@ class GameRecord:
 
 
  def MatchSummaryContent(self):
-  return False #JUSTATEMP
+  m = TotalPotLine.match(self.lines[self.ln]
+  if m is not None:
+   rev_pot_elig = collections.defaultdict(set)
+   list(map(lambda x: rev_pot_elig[x[1]].add(x[0]), self.pot_elig.items()))
+   l = sorted(list(rev_pot_elig.keys))
+   prodolzhit'
+    
 
 
  def GenerateUtcTimestamp(self, tstr, tzstr):
@@ -637,6 +638,8 @@ class GameRecord:
 
 
  def MoneyToInt(self, amount_str: str):
+  if amount_str is None:
+   return 0
   multiplier, _ = CurrencyParams[self.currency]
   return round(float(amount_str) * multiplier)
 
