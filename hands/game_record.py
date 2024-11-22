@@ -1,9 +1,10 @@
-import re
+import regex as re
 from datetime import datetime
 import pytz
 from enum import Enum
 import collections
 from utils import KnownException
+import numpy as np
 
 class GameState(Enum):
  Preflop=0
@@ -39,7 +40,6 @@ LeavesTheTableLine = re.compile(r"(.+) leaves the table")
 TimedOutLine = re.compile(r"(.+) has timed out.*")
 ConnectedLine = re.compile(r"(.+) is (dis)?connected.*")
 AllowedToPlayLine = re.compile(r"(.+) will be allowed to play.*")
-WeirdShowLine = re.compile(r"(.+): shows \[(.{2})\]")
 
 PlayerLine = re.compile(r"Seat (\d+): (.+) \([^\d.]*([\d.]+) in chips\)")
 
@@ -67,22 +67,23 @@ RaisesLine = re.compile(r"(.+): raises [^\d.]*([\d.]+) to [^\d.]*([\d.]+)( and i
 UncalledBetLine = re.compile(r"Uncalled bet \([^\d.]*([\d.]+)\) returned to (.+)")
 
 # Showdown lines
-CollectedLine = re.compile(r"(.+) collected [^\d.]*([\d.]+) from pot")
+CollectedLine = re.compile(r"(.+) collected [^\d.]*([\d.]+) from(?: (main|side))? pot(?:\-(\d+))?")
+BareShowsLine = re.compile(r"(.+): shows.*")
 ShowsLine = re.compile(r"(.+): shows \[(.{2}) (.{2})\] \((.+)\)")
 MucksLine = re.compile(r"(.+): mucks hand")
 DoesNotShowLine = re.compile(r"(.+): doesn\'t show hand")
 CashedOutLine = re.compile(r"(.+) cashed out the hand for .*")
 
 # Summary lines
-TotalPotLine = re.compile(r"Total pot [^\d.]*([\d.]+) \| Rake [^\d.]*([\d.]+)")
+TotalPotLine = re.compile(r"Total pot [^\d.]*([\d.]+)(?: Main pot [^\d.]*([\d.]+))?(?: Side pot(?:\-\d+)? [^\d.]*([\d.]+))* \| Rake [^\d.]*([\d.]+)")
 BoardLine = re.compile(r"Board \[.+\]")
-SummarySeatLine = re.compile(r"Seat (\d+): (.+)( \([button|small blind|big blind]\))* (.+)")
+SummarySeatLine = re.compile(r"Seat (\d+): (.+)(?: \((?:button|small blind|big blind)\))* (.+)")
 SummarySeatIgnoreLine = re.compile(r"Seat (\d+): (.+)")
 SummarySeatMuckedLine = re.compile(r"mucked.*")
 SummarySeatFoldedLine = re.compile(r"folded.*")
-SummarySeatShowedLine = re.compile(r"showed \[.+\] and (.+)")
-SummarySeatShowedLostLine = re.compile(r"lost.*")
-SummarySeatShowedWonLine = re.compile(r"won.*")
+SummarySeatShowedWonLine = re.compile(r"showed \[.+\] and won \([^\d.]*([\d.]+\) with.*")
+SummarySeatShowedLostLine = re.compile(r"showed \[.+\] and lost with.*"))
+SummarySeatCollectedLine = re.compile(r"collected \([^\d.]*([\d.]+\)\)")
 
 
 # See game_record_attrib_desc.txt for attribute description
@@ -104,7 +105,7 @@ class GameRecord:
  WasteLines = [([SittingOutLine, SitsOutLine, JoinsTheTableLine,
   AllowedToPlayLine], ProcessNonPlayerWasteLine),
   ([TimedOutLine, ConnectedLine, LeavesTheTableLine], ProcessIgnoreWasteLine),
-  ([WeirdShowLine], ProcessPlayerWasteLine)]
+  ([], ProcessPlayerWasteLine)]
 
 
  def SkipWaste(self):
@@ -127,8 +128,9 @@ class GameRecord:
     return
    
 
- def __init__(self):
-  pass
+ def __init__(self, file: str, start_line: int):
+  self.file = file
+  self.start_line = start_line
 
 
  def ParseLines(self, lines: list): 
@@ -199,6 +201,13 @@ class GameRecord:
 
   del self.index_in_pos
 
+  self.CalculatePotEligibility()
+  #JUSTATEMP START
+  if np.unique(np.array(list(self.pot_elig.values()))).shape[0] > 2:
+   print(f"LOOKHERE {self.start_line} {self.file}")
+   assert False
+  #JUSTATEMP END
+
   players_left = len(self.all_in_pos) + len(self.active_pos)
   assert players_left
   
@@ -218,8 +227,7 @@ class GameRecord:
    m = TotalPotLine.match(self.lines[self.ln])
    if m is not None:
     amount = self.MoneyToInt(m.group(1))
-    tbets = sum([self.bet[x] for x in self.players])
-    if amount != tbets + self.donations:
+    if amount != self.total_pot:
      print("DISCREPANCY", amount, tbets)
      assert False
     break
@@ -545,14 +553,18 @@ class GameRecord:
   players_left = len(self.all_in_pos) + len(self.active_pos)
   assert players_left
 
-  m = ShowsLine.match(self.lines[self.ln])
+  m = BareShowsLine.match(self.lines[self.ln])
   if m is not None:
-   # Can happen even with 1 player left
-   player = m.group(1)
-   player_ind = self.players.index(player)
-   assert (player_ind in self.all_in_pos) or (player_ind in self.active_pos)
-   self.shown[player] = m.group(2) + m.group(3)
-   self.combination[player] = m.group(4)
+   m = ShowsLine.match(self.lines[self.ln])
+   if m is not None:
+    # Can happen even with 1 player left
+    player = m.group(1)
+    player_ind = self.players.index(player)
+    assert (player_ind in self.all_in_pos) or (player_ind in self.active_pos)
+    self.shown[player] = m.group(2) + m.group(3)
+    self.combination[player] = m.group(4)
+   # Return True even if just a bare line, as the bare lines appear
+   # for no reason
    return True
 
   m = MucksLine.match(self.lines[self.ln])
@@ -573,9 +585,8 @@ class GameRecord:
    player = m.group(1)
    player_ind = self.players.index(player)
    assert (player_ind in self.active_pos) or (player_ind in self.all_in_pos)
-   amount = self.MoneyToInt(m.group(2))
-   self.in_chips[player] += amount
-   self.winnings[player] = amount
+   # Amount won will be recorded during processing of summary lines
+   # (in the seat/showed/won or collected line)
    return True
 
   m = CashedOutLine.match(self.lines[self.ln])
@@ -598,6 +609,24 @@ class GameRecord:
   dt = datetime.strptime(tstr, "%Y/%m/%d %H:%M:%S").replace(tzinfo=tz)
   self.timestamp = dt.astimezone(pytz.utc)
 
+
+ def CalculatePotEligibility(self):
+  self.pot_elig = {}
+  for ind in self.all_in_pos:
+   player = self.players[ind]
+   bet = self.bet[player]
+   s = self.donations
+   for p in self.players:
+    s += min(self.bet[p], bet)
+   self.pot_elig[player] = s
+
+  self.total_pot = self.donations
+  for p in self.players:
+   self.total_pot += self.bet[p]
+
+  for ind in self.active_pos:
+   self.pot_elig[self.players[ind]] = self.total_pot
+      
 
  def AddMove(self, player_index, move, amount=None):
   if amount is None:

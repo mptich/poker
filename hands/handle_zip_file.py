@@ -27,11 +27,11 @@ def ParseArgs():
 
 def ProcessZipFile(input_file, folder, erase_temp=True, assert_reraise=False,
  other_reraise=True):
- temp_folder = os.path.join(args.folder, 'temp')
+ temp_folder = os.path.join(folder, 'temp')
  os.mkdir(temp_folder)
 
  zip_file = os.path.join(temp_folder, 'my.zip')
- shutil.copy(args.input_file, zip_file)
+ shutil.copy(input_file, zip_file)
 
  curr_folder = os.getcwd()
  os.chdir(temp_folder)
@@ -46,7 +46,7 @@ def ProcessZipFile(input_file, folder, erase_temp=True, assert_reraise=False,
 
  for ind, fn in enumerate(glob.glob(os.path.join(temp_folder, "*"))):
   new_hands, known_errors, new_asserts, new_errors = \
-   utils.ProcessRecordFile(fn=fn, org_file=args.input_file,
+   utils.ProcessRecordFile(fn=fn, org_file=input_file,
     assert_reraise=assert_reraise, other_reraise=other_reraise)
   hands += new_hands
   total_known_errors.update(known_errors)
