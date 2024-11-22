@@ -12,10 +12,11 @@ Fields:
 9. Slash separated amounts in chips for each player
 10. Additional contributions of non-blinds: <player index>{s|b|sb}
 11. Slash separated communal cards (up to 5)
-12. Slash separated moves, preflop <player index>{fo|ch|be|ca|ra|un}[amount]
+12. Slash separated moves, preflop <player index>:{fo|ch|be|ca|ra|un}[amount]
 13. Flop moves
 14. Turn moves
 15. River moves
 16. Shown cards <player index>5sTc<combination> or mucks <player index>m
-17. Pot / rake
-18. Players and their gains (losses if negative)
+17. Pots (total/main/sides) taking into account the rake
+18. Rake
+19. Players and their gains (losses if negative)

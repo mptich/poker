@@ -426,7 +426,7 @@ class GameRecord:
     self.bet[player] = amount
    else:
     self.donations += amount
-    self.contribs.append(f"{self.players.index(player)}s")
+    self.contribs.append(f"{self.players.index(player)}:s")
    return True
    
   m = BigBlindLine.match(self.lines[self.ln])
@@ -442,7 +442,7 @@ class GameRecord:
    if player == self.players[1]:
     self.bb_found = True
    else:
-    self.contribs.append(f"{self.players.index(player)}b")
+    self.contribs.append(f"{self.players.index(player)}:b")
    return True
 
   m = BothBlindsLine.match(self.lines[self.ln])
@@ -458,7 +458,7 @@ class GameRecord:
    self.donations += self.sb_fee
    assert self.in_chips[player] >= amount
    self.in_chips[player] -= amount
-   self.contribs.append(f"{self.players.index(player)}sb")
+   self.contribs.append(f"{self.players.index(player)}:sb")
    return True
 
   m = AnteLine.match(self.lines[self.ln])
@@ -676,10 +676,10 @@ class GameRecord:
 
  def AddMove(self, player_index, move, amount=None):
   if amount is None:
-   self.moves[self.state.value].append(f"{player_index}{move}")
+   self.moves[self.state.value].append(f"{player_index}:{move}")
   else:
    amount_str = self.IntToMoney(amount)
-   self.moves[self.state.value].append(f"{player_index}{move}{amount_str}")
+   self.moves[self.state.value].append(f"{player_index}:{move}{amount_str}")
 
 
  def MoneyToInt(self, amount_str: str):
