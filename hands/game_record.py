@@ -39,6 +39,7 @@ LeavesTheTableLine = re.compile(r"(.+) leaves the table")
 TimedOutLine = re.compile(r"(.+) has timed out.*")
 ConnectedLine = re.compile(r"(.+) is (dis)?connected.*")
 AllowedToPlayLine = re.compile(r"(.+) will be allowed to play.*")
+WeirdShowLine = re.compile(r"(.+): shows \[(.{2})\]")
 
 PlayerLine = re.compile(r"Seat (\d+): (.+) \([^\d.]*([\d.]+) in chips\)")
 
@@ -75,7 +76,7 @@ CashedOutLine = re.compile(r"(.+) cashed out the hand for .*")
 # Summary lines
 TotalPotLine = re.compile(r"Total pot [^\d.]*([\d.]+) \| Rake [^\d.]*([\d.]+)")
 BoardLine = re.compile(r"Board \[.+\]")
-SummarySeatLine = re.compile(r"Seat (\d+): (.+)( \([button|small blind|big blind]\))? (.+)")
+SummarySeatLine = re.compile(r"Seat (\d+): (.+)( \([button|small blind|big blind]\))* (.+)")
 SummarySeatIgnoreLine = re.compile(r"Seat (\d+): (.+)")
 SummarySeatMuckedLine = re.compile(r"mucked.*")
 SummarySeatFoldedLine = re.compile(r"folded.*")
@@ -86,9 +87,14 @@ SummarySeatShowedWonLine = re.compile(r"won.*")
 
 # See game_record_attrib_desc.txt for attribute description
 class GameRecord:
- def ProcessPerUserWasteLine(self, m):
+ def ProcessNonPlayerWasteLine(self, m):
   if m.group(1) in self.players:
    raise KnownException("Weird repositioning")
+
+
+ def ProcessPlayerWasteLine(self, m):
+  if m.group(1) not in self.players:
+   raise KnownException("Weird show line for a non player")
 
 
  def ProcessIgnoreWasteLine(self, m):
@@ -96,8 +102,9 @@ class GameRecord:
 
 
  WasteLines = [([SittingOutLine, SitsOutLine, JoinsTheTableLine,
-  AllowedToPlayLine], ProcessPerUserWasteLine),
-  ([TimedOutLine, ConnectedLine, LeavesTheTableLine], ProcessIgnoreWasteLine)]
+  AllowedToPlayLine], ProcessNonPlayerWasteLine),
+  ([TimedOutLine, ConnectedLine, LeavesTheTableLine], ProcessIgnoreWasteLine),
+  ([WeirdShowLine], ProcessPlayerWasteLine)]
 
 
  def SkipWaste(self):
@@ -129,6 +136,8 @@ class GameRecord:
   self.ln = 0
   self.players = []
   self.winnings = {}
+  self.shown = {}
+  self.combination = {}
   self.cashed_out = set()
   self.MatchFirstLine()
 
@@ -525,18 +534,20 @@ class GameRecord:
   assert m is not None
 
 
- def MatchSummaryLine():
+ def MatchSummaryLine(self):
   m = SummaryLine.match(self.lines[self.ln])
   assert m is not None
   
 
  def MatchShowDownContent(self):
+  self.SkipWaste()
+
   players_left = len(self.all_in_pos) + len(self.active_pos)
   assert players_left
 
   m = ShowsLine.match(self.lines[self.ln])
   if m is not None:
-   assert players_left >= 2
+   # Can happen even with 1 player left
    player = m.group(1)
    player_ind = self.players.index(player)
    assert (player_ind in self.all_in_pos) or (player_ind in self.active_pos)
@@ -578,8 +589,8 @@ class GameRecord:
   return False
 
 
- def MatchSummaryContent():
-prodolzhit'
+ def MatchSummaryContent(self):
+  return False #JUSTATEMP
 
 
  def GenerateUtcTimestamp(self, tstr, tzstr):
