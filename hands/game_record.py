@@ -40,6 +40,7 @@ LeavesTheTableLine = re.compile(r"(.+) leaves the table")
 TimedOutLine = re.compile(r"(.+) has timed out.*")
 ConnectedLine = re.compile(r"(.+) is (dis)?connected.*")
 AllowedToPlayLine = re.compile(r"(.+) will be allowed to play.*")
+WasRemovedLine = re.compile("(.+) was removed from the table.*")
 
 PlayerLine = re.compile(r"Seat (\d+): (.+) \([^\d.]*([\d.]+) in chips\)")
 
@@ -75,15 +76,15 @@ DoesNotShowLine = re.compile(r"(.+): doesn\'t show hand")
 CashedOutLine = re.compile(r"(.+) cashed out the hand for .*")
 
 # Summary lines
-TotalPotLine = re.compile(r"Total pot [^\d.]*([\d.]+)(?: Main pot [^\d.]*([\d.]+))?(?: Side pot(?:\-\d+)? [^\d.]*([\d.]+))* \| Rake [^\d.]*([\d.]+)")
+SummarySeatLineStr = r"Seat (\d+): (.+?)(?: \((?:button|small blind|big blind)\))+ "
+TotalPotLine = re.compile(r"Total pot [^\d.]*([\d.]+)(?: Main pot [^\d.]*([\d.]+)\.)?(?: Side pot(?:\-\d+)? [^\d.]*([\d.]+)\.)* \| Rake [^\d.]*([\d.]+)")
 BoardLine = re.compile(r"Board \[.+\]")
-SummarySeatLine = re.compile(r"Seat (\d+): (.+)(?: \((?:button|small blind|big blind)\))* (.+)")
 SummarySeatIgnoreLine = re.compile(r"Seat (\d+): (.+)")
-SummarySeatMuckedLine = re.compile(r"mucked.*")
-SummarySeatFoldedLine = re.compile(r"folded.*")
-SummarySeatShowedWonLine = re.compile(r"showed \[.+\] and won \([^\d.]*([\d.]+)\) with.*")
-SummarySeatShowedLostLine = re.compile(r"showed \[.+\] and lost with.*")
-SummarySeatCollectedLine = re.compile(r"collected \([^\d.]*([\d.]+)\)")
+ActionSeatMuckedLine = re.compile(SummarySeatLineStr + r"mucked.*")
+ActionSeatFoldedLine = re.compile(SummarySeatLineStr + r"folded.*")
+ActionSeatShowedWonLine = re.compile(SummarySeatLineStr + r"showed \[.+\] and won \([^\d.]*([\d.]+)\) with.*")
+ActionSeatShowedLostLine = re.compile(SummarySeatLineStr + r"showed \[.+\] and lost with.*")
+ActionSeatCollectedLine = re.compile(SummarySeatLineStr + r"collected \([^\d.]*([\d.]+)\)")
 
 
 # See game_record_attrib_desc.txt for attribute description
@@ -104,8 +105,8 @@ class GameRecord:
 
  WasteLines = [([SittingOutLine, SitsOutLine, JoinsTheTableLine,
   AllowedToPlayLine], ProcessNonPlayerWasteLine),
-  ([TimedOutLine, ConnectedLine, LeavesTheTableLine], ProcessIgnoreWasteLine),
-  ([], ProcessPlayerWasteLine)]
+  ([TimedOutLine, ConnectedLine, LeavesTheTableLine, WasRemovedLine],
+  ProcessIgnoreWasteLine), ([], ProcessPlayerWasteLine)]
 
 
  def SkipWaste(self):
@@ -218,6 +219,14 @@ class GameRecord:
   self.ln += 1
   while (self.ln < len(self.lines)) and self.MatchSummaryContent():
    self.ln += 1
+
+  balance = 0
+  for p in self.players:
+   won = self.in_chips[p] - self.initial_in_chips[p]
+   if won > 0:
+    assert won < self.winnings[p]
+   balance += won
+  assert balance <= 0
 
   
  def MatchMoveLine(self):
@@ -595,50 +604,86 @@ class GameRecord:
     assert m.group(2) is not None
     assert m.captures(3)
     side_pots = list(map(self.MoneyToInt, m.captures(3)))
-    assert self.MoneyToInt(m.group(2)) == self.pots[1] - self.rake
+    short = self.pots[1] - self.MoneyToInt(m.group(2))
     for ind,capt in enumerate(m.captures(3)):
-     assert self.MoneyToInt(capt) == self.pots[ind+2]
+     short += self.pots[ind+2] - self.MoneyToInt(capt)
+    assert short == self.rake
    return True
 
   m = BoardLine.match(self.lines[self.ln])
   if m is not None:
    return True
 
-  m = SummarySeatLine.match(self.lines[self.ln])
+  if self.MatchActionSeatLine():
+   return True
+
+  # Should be checked after all other SummarySeatLine
+  m = SummarySeatIgnoreLine.match(self.lines[self.ln])
   if m is not None:
-   seat = int(group(1))
-   player = m.group(2)
-   assert self.seat[player] == seat
-   action_str = m.group(3)
-   ret = self.MatchActionOfSeatLine(player, action_str)
-   assert ret
    return True
 
   # Should not get here
   assert False
     
 
- def MatchActionOfSeatLine(self, player, action_str)
-  m = SummarySeatMuckedLine.match(action_str)
+ def MatchActionSeatLine(self):
+  m = ActionSeatMuckedLine.match(self.lines[self.ln])
   if m is not None:
+   player = self.ValidateSummarySeatLine(m)
    assert len(self.pot_elig) > 1
    assert player in self.muckers
    return True
 
-  m = SummarySeatFoldedLine.match(action_str)
+  m = ActionSeatFoldedLine.match(self.lines[self.ln])
   if m is not None:
+   player = self.ValidateSummarySeatLine(m)
+   player_ind = self.players.index(player)
+   assert (player_ind not in self.all_in_pos) and \
+    (player_ind not in self.active_pos)
    return True
 
-  m = SummarySeatShowedWonLine.match(action_str)
+  m = ActionSeatShowedWonLine.match(self.lines[self.ln])
   if m is not None:
+   player = self.ValidateSummarySeatLine(m)
+   player_ind = self.players.index(player)
    assert len(self.pot_elig) > 1
-   amount = self.MoneyToInt(m.group(1))
+   assert (player_ind in self.all_in_pos) or (player_ind in self.active_pos)
+   amount = self.MoneyToInt(m.group(3))
    elig = self.pot_elig[player]
    assert (amount == elig) or (amount == elig-self.rake)
    self.in_chips[player] += amount
    self.winnings[player] += amount
-   
+   return True
 
+  m = ActionSeatShowedLostLine.match(self.lines[self.ln])
+  if m is not None:
+   player = self.ValidateSummarySeatLine(m)
+   player_ind = self.players.index(player)
+   assert len(self.pot_elig) > 1
+   assert (player_ind in self.all_in_pos) or (player_ind in self.active_pos)
+   return True
+
+  m = ActionSeatCollectedLine.match(self.lines[self.ln])
+  if m is not None:
+   player = self.ValidateSummarySeatLine(m)
+   player_ind = self.players.index(player)
+   assert len(self.pot_elig) == 1
+   assert (player_ind in self.all_in_pos) or (player_ind in self.active_pos)
+   amount = self.MoneyToInt(m.group(3))
+   self.in_chips[player] += amount
+   self.winnings[player] += amount
+   return True
+
+  return False
+
+
+ def ValidateSummarySeatLine(self, m):
+  seat = int(m.group(1))
+  player = m.group(2)
+  assert self.seat[player] == seat
+  return player
+
+  
  def GenerateUtcTimestamp(self, tstr, tzstr):
   tz = pytz.timezone(tzstr)
   dt = datetime.strptime(tstr, "%Y/%m/%d %H:%M:%S").replace(tzinfo=tz)
