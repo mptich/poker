@@ -133,7 +133,7 @@ def Process7Cards(h7):
     for ind, card in enumerate(h7):
      if ind not in (i,j):
       out.append(card)
-    hand, rank = GetHandAndRankFrom5(out)
+    hand, rank = GetHandAndRankFrom7(out)
     total_rank = HandAndRankToTotalRank(hand, rank)
     if total_rank > best_rank:
      best_rank = total_rank
