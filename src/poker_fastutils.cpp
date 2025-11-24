@@ -1,11 +1,16 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>  // Enables automatic STL conversions (vector, pair, etc.)
 #include <vector>
+#include <map>
 #include <string>
+
+#include "poker_defs.h"
+
 
 namespace py = pybind11;
 
 typedef std::pair<int, bool> Card;
+typedef std::map<int,std::vector<int>> KindCount;
 
 static bool CheckForStraight(const std::vector<Card> &v, int *pStraightRank) {
 
@@ -37,9 +42,31 @@ static bool CheckForStraight(const std::vector<Card> &v, int *pStraightRank) {
     return false;
 }
 
-            
+static bool CheckForFullHouse(const std::vector<Card> &v, const KindCount &kindCounts, int *pFfullHouseRank) {
+    if (kindCounts.at(3).size() == 0) return false;
+    if (kindCounts.at(3).size() + kindCounts.at(2).size() < 2) return false;
 
+    std::vector<int> threeVector = kindCounts.at(3);
+
+    std::sort(threeVector.begin(), threeVector.end(), [](int a, int b) {
+        return a > b; // comparison for descending order
+    });
+
+    int threeRank = threeVector[0];
+
+    int twoRank = -1;
+    if (threeVector.size() == 2) {
+        twoRank = *threeVector.end();
+    }
+
+    for (int k : kindCounts.at(2)) {
+        if (k > twoRank) twoRank = k;
+    }
+
+    *pFfullHouseRank = threeRank * 13 + twoRank;
+    return true;
 }
+
 
 // Returns absolute imaximum rank of 7 cards
 // Integer is card value, boolean is true if the suite is significant (that could potentially create flush)
@@ -55,23 +82,24 @@ int Process7Cards(const std::vector<Card>& input) {
     // Add dummy value
     v.emplace_back(Card(1000, false));
 
-    std::map<int,std::vector<int>> kindCount = {(2,{}), (3,{}), (4,{})};
+    KindCount kindCounts = {{2,{}}, {3,{}}, {4,{}}};
 
     int flushCount = 0;
-    int flashRank = 0;
+    int kindCount = 0;
+    int flushRank = 0;
     int prev = -1;
     for (const Card &c: v) {
-        if (c.first == prev) count += 1;
+        if (c.first == prev) kindCount += 1;
         else {
-            if (count) {
-                kindCount[count+1].emplace_back(prev);
-                count = 0;
+            if (kindCount) {
+                kindCounts[kindCount+1].emplace_back(prev);
+                kindCount = 0;
             }
             prev = c.first;
         }
 
         if (c.second) {
-            flusRank = flushRank * 13 + c.first; 
+            flushRank = flushRank * 13 + c.first; 
             flushCount += 1;
         }
     }
@@ -82,9 +110,9 @@ int Process7Cards(const std::vector<Card>& input) {
     v.pop_back();
 
     // Check for straight and straight flush
-    bool straightRank;
+    int straightRank;
 
-    // First for straightflash
+    // First for straightflush
     if (flush) {
         std::vector<Card> signifV;
         for (const Card &c : v) {
@@ -94,10 +122,10 @@ int Process7Cards(const std::vector<Card>& input) {
             return PO_STRAIGHT_FLUSH * HandMulti + straightRank;
     }
 
-    auto fourVector = kindCount[4];
+    auto fourVector = kindCounts[4];
     if (!fourVector.empty()) {
         // It can have only 1 element
-        int fourRank = fourVector.at(0);
+        int fourRank = fourVector[0];
         for (const Card &c : v) {
             if (c.first != fourRank) {
                 fourRank = fourRank * 13 + c.first;
@@ -107,7 +135,7 @@ int Process7Cards(const std::vector<Card>& input) {
     }
 
     int fullHouseRank;
-    if (CheckForFullHouse(v, kindCount, &fullHouseRank)
+    if (CheckForFullHouse(v, kindCounts, &fullHouseRank))
         return PO_FULL_HOUSE * HandMulti + fullHouseRank;
 
     if (flush)
@@ -116,12 +144,10 @@ int Process7Cards(const std::vector<Card>& input) {
     if (CheckForStraight(v, &straightRank))
         return PO_STRAIGHT * HandMulti + straightRank;
 
-    auto threeVector = kindCount[3];
+    auto threeVector = kindCounts[3];
     if (!threeVector.empty()) {
-        // there can be more than 1 element in this vector
-        int threeRank = -1;
-        for (auto k : threeVector)
-            if (k > threeRank) threeRank = k;
+        // There can be only 1 member, otherwise it would have been a full house earlier
+        int threeRank = threeVector[0];
         int nonThreeCount = 0;
         int r = 0;
         for (const Card &c : v) {
@@ -136,7 +162,7 @@ int Process7Cards(const std::vector<Card>& input) {
     }
 
     // check for 2 or 1 pairs
-    int absRank = CheckForPairs(v, kindCount.at(2));
+    int absRank = CheckForPairs(v, kindCounts.at(2));
     if (absRank) return absRank;
 
     // High card
