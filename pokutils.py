@@ -33,8 +33,9 @@ def TwoCardsToMeaning(c1,c2):
  return (min(c1[0], c2[0]), max(c1[0], c2[0]), c)
 
 def GetHandAndRankFrom5(h):
- # h must be sorted by card value
- flash = (len(set([x[1] for x in h])) == 1)
+ # h must be sorted by card values, with suit replaced with True (significant suite that could,
+ # potentially, form a flush) and False (insignificant suite that cannot form a flush)
+ flash = (sum([x[1] for x in h]) == 5)
  vals = [x[0] for x in h]
  vals_count = collections.Counter(vals)
 
@@ -93,9 +94,9 @@ def Process7Cards(h7):
   for j in range(i+1,7):
 
    out = []
-   for ind, card in enumerate(h7):
+   for ind, c in enumerate(h7):
     if ind not in (i,j):
-     out.append(card)
+     out.append(c)
    hand, rank = GetHandAndRankFrom5(out)
    total_rank = HandAndRankToTotalRank(hand, rank)
    if total_rank > best_rank:

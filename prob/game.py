@@ -16,13 +16,28 @@ totald = collections.defaultdict(int)
 for _ in tqdm(range(100000)):
 
  s = random.sample(Values, PLAYERS*2 + 5)
+ suiteCounts = collections.Counter([x[1] for x in s[-5:]])
+ signifSuite = None
+ for k in suiteCounts.keys():
+     if suiteCounts[k] >= 3:
+         signifSuite = k;
+         break
+
+ # Assing cards with signif / non-signif suite
+ sout = []
+ for card in s:
+     if card[1] != signifSuite:
+         sout.append((card[0], False))
+     else:
+         sout.append((card[0], True)
+
  best_rank = -1
  for pl in range(PLAYERS):
-  c1=s[pl*2]
-  c2=s[pl*2+1]
-  tc = pu.TwoCardsToMeaning(c1, c2)
+  card1=s[pl*2]
+  card2=s[pl*2+1]
+  tc = pu.TwoCardsToMeaning(card1, card2)
   totald[tc] += 1
-  h7 = [c1, c2]+s[-5:]
+  h7 = [sout[pl*2], sout[pl*2+1]] + sout[-5:]
   bh, br = pu.Process7Cards(h7)
   if br > best_rank:
    best_rank = br
