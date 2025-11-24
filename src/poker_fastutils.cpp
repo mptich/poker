@@ -42,7 +42,7 @@ static bool CheckForStraight(const std::vector<Card> &v, int *pStraightRank) {
     return false;
 }
 
-static bool CheckForFullHouse(const std::vector<Card> &v, const KindCount &kindCounts, int *pFfullHouseRank) {
+static bool CheckForFullHouse(const KindCount &kindCounts, int *pFfullHouseRank) {
     if (kindCounts.at(3).size() == 0) return false;
     if (kindCounts.at(3).size() + kindCounts.at(2).size() < 2) return false;
 
@@ -66,6 +66,42 @@ static bool CheckForFullHouse(const std::vector<Card> &v, const KindCount &kindC
     *pFfullHouseRank = threeRank * 13 + twoRank;
     return true;
 }
+
+static int CheckForPairs(const std::vector<Card> &v, const std::vector<int> &twoVector) {
+    if (twoVector.size() == 1) {
+        // Pair
+        int twoRank = twoVector[0];
+        int r = twoRank;
+        int count = 0;
+        for (const Card &c : v) {
+            if (c.first != twoRank) {
+                r = r * 13 + c.first;
+                count++;
+                if (count == 3) {
+                    return PO_PAIR * HandMulti + r;
+                }
+            }
+        }
+    }
+
+    if (twoVector.size() > 1) {
+        // Two pairs
+        std::vector<int> twoV = twoVector;
+        std::sort(twoV.begin(), twoV.end(), [](int a, int b) {
+            return a > b; // comparison for descending order
+        });
+        int highRank = twoV[0];
+        int lowRank = twoV[1];
+        for (const Card &c : v) {
+            if ((c.first != highRank) && (c.first != lowRank))
+                return PO_TWO_PAIRS * HandMulti + (highRank * 13 + lowRank) * 13 + c.first;
+        }
+    }
+
+    // No pairs
+    return 0;
+}
+
 
 
 // Returns absolute imaximum rank of 7 cards
@@ -135,7 +171,7 @@ int Process7Cards(const std::vector<Card>& input) {
     }
 
     int fullHouseRank;
-    if (CheckForFullHouse(v, kindCounts, &fullHouseRank))
+    if (CheckForFullHouse(kindCounts, &fullHouseRank))
         return PO_FULL_HOUSE * HandMulti + fullHouseRank;
 
     if (flush)
@@ -149,7 +185,7 @@ int Process7Cards(const std::vector<Card>& input) {
         // There can be only 1 member, otherwise it would have been a full house earlier
         int threeRank = threeVector[0];
         int nonThreeCount = 0;
-        int r = 0;
+        int r = threeRank;
         for (const Card &c : v) {
             if (c.first != threeRank) {
                 r = r *13 + c.first;
@@ -157,8 +193,7 @@ int Process7Cards(const std::vector<Card>& input) {
                 if (nonThreeCount == 2) break;
             }
         }
-        threeRank = threeRank * 13 * 13 + r; 
-        return PO_THREE_OFAK * HandMulti + threeRank;
+        return PO_THREE_OFAK * HandMulti + r;
     }
 
     // check for 2 or 1 pairs
@@ -175,7 +210,7 @@ int Process7Cards(const std::vector<Card>& input) {
     }
 
     // Should not be here
-    return 0
+    return 0;
 }
 
 
