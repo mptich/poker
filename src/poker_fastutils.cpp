@@ -7,6 +7,40 @@ namespace py = pybind11;
 
 typedef std::pair<int, bool> Card;
 
+static bool CheckForStraight(const std::vector<Card> &v, int *pStraightRank) {
+
+    int straightRank = 0;
+    int prev = -1;
+    int straightCount;
+    for (const Card &c : v) {
+        if (c.first !=  (prev-1)) {
+            if (c.first != prev) {
+                straightRank = c.first;
+                straightCount = 1;
+            }
+        } else {
+            straightCount += 1;
+        }
+
+        if (straightCount == 5) break;
+    }
+
+    // Check the reverse Ace case
+    if ((straightCount == 4) && (v.back().first == 0) && (v[0].first == 12))
+        straightCount = 5;
+
+    if (straightCount == 5) {
+        *pStraightRank = straightRank;
+        return true;
+    }
+
+    return false;
+}
+
+            
+
+}
+
 // Returns absolute imaximum rank of 7 cards
 // Integer is card value, boolean is true if the suite is significant (that could potentially create flush)
 // and false if it is not significant
