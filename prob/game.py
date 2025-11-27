@@ -5,44 +5,30 @@ from tqdm import tqdm
 from values import Values
 import disputils as du
 import pokutils as pu
+import PokerFastutils as pf
 
-PLAYERS = 6
+PLAYERS = 10
 CUTOFF = False
 
 d = collections.defaultdict(int)
 handd = collections.defaultdict(collections.Counter)
 totald = collections.defaultdict(int)
 
-for _ in tqdm(range(100000)):
+for _ in tqdm(range(1000000)):
 
  s = random.sample(Values, PLAYERS*2 + 5)
- suiteCounts = collections.Counter([x[1] for x in s[-5:]])
- signifSuite = None
- for k in suiteCounts.keys():
-     if suiteCounts[k] >= 3:
-         signifSuite = k;
-         break
-
- # Assing cards with signif / non-signif suite
- sout = []
- for card in s:
-     if card[1] != signifSuite:
-         sout.append((card[0], False))
-     else:
-         sout.append((card[0], True)
-
  best_rank = -1
  for pl in range(PLAYERS):
   card1=s[pl*2]
   card2=s[pl*2+1]
   tc = pu.TwoCardsToMeaning(card1, card2)
   totald[tc] += 1
-  h7 = [sout[pl*2], sout[pl*2+1]] + sout[-5:]
-  bh, br = pu.Process7Cards(h7)
-  if br > best_rank:
-   best_rank = br
+  h7 = [card1, card2] + s[-5:]
+  btr = pf.Process7CardsWithSuite(h7)
+  if btr > best_rank:
+   best_rank = btr
    winner_list = [tc]
-  elif br == best_rank:
+  elif btr == best_rank:
    winner_list.append(tc)
  
  winReward = 1. / len(winner_list)

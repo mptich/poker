@@ -5,6 +5,8 @@ import random
 #from numba import njit, prange
 import numpy as np
 
+import disputils as du
+
 HandRank = { \
  'strfl':8, 
  '4':7,
@@ -14,15 +16,47 @@ HandRank = { \
  '3':3,
  '22':2,
  '2':1,
- '':0
+ 'hc':0
 }
+
 HandFromHandRank = {v:k for k,v in HandRank.items()}
 
+# Significant positions in the rank
+HandToRankLen = { \
+ 'strfl': 1,
+ '4': 2,
+ 'fh': 2,
+ 'fl': 5,
+ 'str': 1,
+ '3': 3,
+ '22': 3,
+ '2': 4,
+ 'hc': 5
+}
+
+HandMulti = 13*13*13*13*13
+
 def HandAndRankToTotalRank(hand, rank):
- return HandRank[hand]*13*13*13*13*13 + rank
+ return HandRank[hand]*HandMulti + rank
 
 def TotalRankToHandRank(tr):
- return tr//(13*13*13*13*13)
+ return tr//HandMulti
+
+def TotalRankToHandAndRank(tr):
+ return HandFromHandRank[tr//HandMulti], tr % HandMulti
+
+def RankDesc(h, r):
+    c =[]
+    for _ in range(HandToRankLen[h]):
+        c.append(du.CardValToDisplayStr[r % 13])
+        r //= 13
+    assert r == 0
+    return ' '.join(c)
+
+def TotalRankToHandAndRankDesc(tr):
+    h, r = TotalRankToHandAndRank(tr)
+    return h + ' ' + RankDesc(h, r)
+
 
 # Translates to cards into a value from TwoCards
 def TwoCardsToMeaning(c1,c2):
@@ -54,7 +88,7 @@ def GetHandAndRankFrom5(h):
   else:
    # Flash or nothing, rank from all 5 cards in both cases
    rank = (((vals[4]*13+vals[3])*13+vals[2])*13+vals[1])*13+vals[0]
-   return '' if not flash else 'fl', rank
+   return 'hc' if not flash else 'fl', rank
 
  elif len(vals_count) == 2:
   # Full house or 4 candidate
@@ -86,7 +120,7 @@ def GetHandAndRankFrom5(h):
  rank = ((keys_by_val[3]*13+restOfCards[2])*13+restOfCards[1])*13+restOfCards[0]
  return '2', rank
  
-def Process7Cards(h7):
+def Process7CardsWithSuite(h7):
  h7.sort(key = lambda x: x[0])
  best_rank = -1
 

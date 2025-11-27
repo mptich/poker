@@ -3,6 +3,7 @@
 #include <vector>
 #include <map>
 #include <string>
+#include <iostream>
 
 #include "poker_defs.h"
 
@@ -10,12 +11,13 @@
 namespace py = pybind11;
 
 typedef std::pair<int, bool> Card;
+typedef std::pair<int, int> CardWithSuite;
 typedef std::map<int,std::vector<int>> KindCount;
 
 static bool CheckForStraight(const std::vector<Card> &v, int *pStraightRank) {
 
     int straightRank = 0;
-    int prev = -1;
+    int prev = -1; // illegarl
     int straightCount;
     for (const Card &c : v) {
         if (c.first !=  (prev-1)) {
@@ -27,7 +29,11 @@ static bool CheckForStraight(const std::vector<Card> &v, int *pStraightRank) {
             straightCount += 1;
         }
 
-        if (straightCount == 5) break;
+        if (straightCount == 5) {
+            break;
+        }
+
+        prev = c.first;
     }
 
     // Check the reverse Ace case
@@ -56,7 +62,7 @@ static bool CheckForFullHouse(const KindCount &kindCounts, int *pFfullHouseRank)
 
     int twoRank = -1;
     if (threeVector.size() == 2) {
-        twoRank = *threeVector.end();
+        twoRank = threeVector[1];
     }
 
     for (int k : kindCounts.at(2)) {
@@ -104,7 +110,7 @@ static int CheckForPairs(const std::vector<Card> &v, const std::vector<int> &two
 
 
 
-// Returns absolute imaximum rank of 7 cards
+// Returns absolute maximum rank of 7 cards
 // Integer is card value, boolean is true if the suite is significant (that could potentially create flush)
 // and false if it is not significant
 int Process7Cards(const std::vector<Card>& input) {
@@ -135,8 +141,9 @@ int Process7Cards(const std::vector<Card>& input) {
         }
 
         if (c.second) {
-            flushRank = flushRank * 13 + c.first; 
             flushCount += 1;
+            if (flushCount <= 5)
+                flushRank = flushRank * 13 + c.first; 
         }
     }
 
@@ -213,8 +220,34 @@ int Process7Cards(const std::vector<Card>& input) {
     return 0;
 }
 
+// Returns absolute maximum rank of 7 cards with Suites
+// Integer is card value, 2nd integer is  a suite
+int Process7CardsWithSuite(const std::vector<CardWithSuite>& input) {
+    std::map<int, int> suiteCount = {{0,0}, {1,0}, {2,0}, {3,0}};
+    std::vector<Card> cv;
+
+    for (const CardWithSuite &c : input) {
+        suiteCount[c.second] += 1;
+    }
+
+    int signifSuite = -1;
+    for (const std::pair<int, int> count: suiteCount) {
+        if (count.second >= 5) {
+            signifSuite = count.first;
+        }
+    }
+
+    for (const CardWithSuite &c : input) {
+        cv.emplace_back(Card(c.first, c.second == signifSuite));
+    }
+
+    return Process7Cards(cv);
+}
+
 
 PYBIND11_MODULE(PokerFastutils, m) {
-    m.doc() = "C++ module example with pair and vector handling";
-    m.def("Process7Cards", &Process7Cards, "Process a list of (int, bool) pairs and return a string summary plus filtered list");
+    m.doc() = "C++ module of fast Texas Holdem utilities";
+    m.def("Process7Cards", &Process7Cards, "Process a list of (int, bool) pairs and return the max absolute rank");
+    m.def("Process7CardsWithSuite", &Process7CardsWithSuite, "Process a list of (int, int) pairs and return the max "
+        "absolute rank");
 }
