@@ -7,21 +7,21 @@ import disputils as du
 import pokutils as pu
 import PokerFastutils as pf
 
-PLAYERS = 10
+PLAYERS = 8
 CUTOFF = False
 
 d = collections.defaultdict(int)
 handd = collections.defaultdict(collections.Counter)
 totald = collections.defaultdict(int)
 
-for _ in tqdm(range(1000000)):
+for _ in tqdm(range(3000000)):
 
  s = random.sample(Values, PLAYERS*2 + 5)
  best_rank = -1
  for pl in range(PLAYERS):
   card1=s[pl*2]
   card2=s[pl*2+1]
-  tc = pu.TwoCardsToMeaning(card1, card2)
+  tc = pu.TwoCardsTo2Meaning(card1, card2)
   totald[tc] += 1
   h7 = [card1, card2] + s[-5:]
   btr = pf.Process7CardsWithSuite(h7)

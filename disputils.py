@@ -8,12 +8,6 @@ DisplayStrToCardSuite = {v:k for k,v in CardSuiteToDisplayStr.items()}
 def CardDispToRepresentation(card_str):
  return (DisplayStrToCardVal[card_str[0]], DisplayStrToCardSuite[card_str[1]])
 
-def TwoCardsMeaningToDisplayStr(tc):
- assert len(tc) == 3
- s1 = CardValToDisplayStr[tc[0]]
- s2 = CardValToDisplayStr[tc[1]]
- return s1+s2+tc[2]
-
 def DisplayCardStr(card):
  return CardValToDisplayStr[card[0]] + CardSuiteToDisplayStr[card[1]]
 
