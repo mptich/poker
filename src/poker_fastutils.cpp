@@ -38,6 +38,7 @@ static bool CheckForStraight(const std::vector<Card> &v, int *pStraightRank) {
 
     // Check the reverse Ace case
     if ((straightCount == 4) && (v.back().first == 0) && (v[0].first == 12))
+        // straightRank is set correctly
         straightCount = 5;
 
     if (straightCount == 5) {
@@ -117,11 +118,12 @@ int Process7Cards(const std::vector<Card>& input) {
     // Non cosntant vector
     std::vector<Card> v = input;
 
-    // Sort it in acsending order of values
+    // Sort it in descending order of values
     std::sort(v.begin(), v.end(), [](const Card &a, const Card &b) {
         return a.first > b.first; // comparison for descending order
     });
-    // Add dummy value
+
+    // Add dummy value to properly terminate kind comparison in the following loop
     v.emplace_back(Card(1000, false));
 
     KindCount kindCounts = {{2,{}}, {3,{}}, {4,{}}};
@@ -189,7 +191,7 @@ int Process7Cards(const std::vector<Card>& input) {
 
     auto threeVector = kindCounts[3];
     if (!threeVector.empty()) {
-        // There can be only 1 member, otherwise it would have been a full house earlier
+        // There can be only 1 member and no pairs, otherwise it would have been a full house earlier
         int threeRank = threeVector[0];
         int nonThreeCount = 0;
         int r = threeRank;
