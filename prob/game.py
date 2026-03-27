@@ -7,68 +7,55 @@ import disputils as du
 import pokutils as pu
 import PokerFastutils as pf
 
-PLAYERS = 8
+PLAYERS = 7
 CUTOFF = False
 
-d = collections.defaultdict(int)
-handd = collections.defaultdict(collections.Counter)
+d = collections.defaultdict(float)
+handd = collections.defaultdict(lambda: collections.defaultdict(float))
 totald = collections.defaultdict(int)
 
 for _ in tqdm(range(3000000)):
 
+ #JUSTATEMP
+ gaga=0
  s = random.sample(Values, PLAYERS*2 + 5)
  best_rank = -1
  for pl in range(PLAYERS):
   card1=s[pl*2]
   card2=s[pl*2+1]
-  tc = pu.TwoCardsTo2Meaning(card1, card2)
-  totald[tc] += 1
+  
+  mym = pu.TwoCardsTo2Meaning(card1, card2)
+  #suim = pu.TwoThreeToSuiteMeaning((card1, card2), s[-3:])
+  #valm = pu.TwoThreeToValueMeaning((card1, card2), s[-3:])
+  #JUSTATEMP
+  #mym=suim
+  #JUSTATEMP START
+  if mym == "s3A":
+      gaga=1
+  #JUSTATEMP END
+
+  totald[mym] += 1
   h7 = [card1, card2] + s[-5:]
   btr = pf.Process7CardsWithSuite(h7)
   if btr > best_rank:
    best_rank = btr
-   winner_list = [tc]
+   winner_list = [mym]
   elif btr == best_rank:
-   winner_list.append(tc)
+   winner_list.append(mym)
  
+ #JUSTATEMP START
+ if gaga:
+     if "s3A" not in winner_list:
+         print(pu.TotalRankToHandAndRank(best_rank))
+         for cc in s:
+             print(du.DisplayCardStr(cc), " ", end='')
+         print()
+ #JUSTATEMP END
  winReward = 1. / len(winner_list)
- for tc in winner_list:
-  d[tc] += winReward
-  handd[tc][pu.TotalRankToHandRank(best_rank)] += winReward
+ for mym in winner_list:
+  d[mym] += winReward
+  handd[mym][pu.TotalRankToHandRank(best_rank)] += winReward
 
-def DisplayByCard(d, totald):
- for i in reversed(range(13)):
-  tc = (i,i,'o')
-  print(f"{du.TwoCardsMeaningToDisplayStr(tc)}:", end='')
-  if d[tc]:
-   print(f"{du.NiceFraction(d[tc]/totald[tc],4)} ", end='')
-  else:
-   print(f"0 ", end='')
- print()
- 
- for s in ('s', 'o'):
-  for i in reversed(range(13)):
-   for j in reversed(range(i)):
-    tc = (j,i,s)
-    print(f"{du.TwoCardsMeaningToDisplayStr(tc)}:", end='')
-    if d[tc]:
-     print(f"{du.NiceFraction(d[tc]/totald[tc],4)} ", end='') 
-    else:
-     print(f"0 ", end='')
-  print()
-
-def DisplayByProb(d, totald):
- outd = {}
- for k,v in totald.items():
-  outd[k] = d[k] / v
-
- sorted_dict = dict(sorted(outd.items(),
-  key=lambda item: item[1], reverse=True))
- for k,v in sorted_dict.items():
-  print(f"{du.TwoCardsMeaningToDisplayStr(k)}:{du.NiceFraction(v,4)} ", end='')
-
- print()
-  
 
 def DisplayByProbWithHands(d, totald, handd, cutoff=True):
  outd = {}
@@ -90,7 +77,7 @@ def DisplayByProbWithHands(d, totald, handd, cutoff=True):
   elif not barrier_displayed:
    barrier_displayed = True
    print("-------------------------------------------------------------")
-  print(f"{du.TwoCardsMeaningToDisplayStr(k)}:{du.NiceFraction(v,4)} ", end='')
+  print(f"{k}:{du.NiceFraction(v,4)} ", end='')
   hands_dict = handd[k]
   sorted_hands_dict = dict(sorted(hands_dict.items(),
    key=lambda item: item[1], reverse=True))

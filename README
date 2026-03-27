@@ -1,8 +1,13 @@
 pybind11 submodule has been installed
-
 git submodule add https://github.com/pybind/pybind11.git extern/pybind11
 
 When initializing the repo view, please run the update:
-
 git submodule update --init --recursive
 
+To build the C++ modules:
+mkdir build
+cd build
+cmake ..
+make
+
+To run, for example, prob/game.py, cd to prob and run "PYTHONPATH=..:../build python game.py"
