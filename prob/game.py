@@ -1,3 +1,4 @@
+import sys
 import random
 import collections
 from tqdm import tqdm
@@ -7,6 +8,10 @@ import disputils as du
 import pokutils as pu
 import PokerFastutils as pf
 
+from numba import prange, njit
+from numba.typed import Dict
+
+
 PLAYERS = 7
 CUTOFF = False
 
@@ -14,49 +19,41 @@ d = collections.defaultdict(float)
 handd = collections.defaultdict(lambda: collections.defaultdict(float))
 totald = collections.defaultdict(int)
 
-for _ in tqdm(range(3000000)):
+#@njit(parallel=True)
+def RunMainLoop(count):
+ for _ in tqdm(range(count)):
 
- #JUSTATEMP
- gaga=0
- s = random.sample(Values, PLAYERS*2 + 5)
- best_rank = -1
- for pl in range(PLAYERS):
-  card1=s[pl*2]
-  card2=s[pl*2+1]
+  s = random.sample(Values, PLAYERS*2 + 5)
+  flopCommunalStr, suitDict = pu.FlopCommunalToMeaningPreproc(s[-5:-2])
+
+  best_rank = -1
+  for pl in range(PLAYERS):
+   card1=s[pl*2]
+   card2=s[pl*2+1]
   
-  mym = pu.TwoCardsTo2Meaning(card1, card2)
-  #suim = pu.TwoThreeToSuiteMeaning((card1, card2), s[-3:])
-  #valm = pu.TwoThreeToValueMeaning((card1, card2), s[-3:])
-  #JUSTATEMP
-  #mym=suim
-  #JUSTATEMP START
-  if mym == "s3A":
-      gaga=1
-  #JUSTATEMP END
-
-  totald[mym] += 1
-  h7 = [card1, card2] + s[-5:]
-  btr = pf.Process7CardsWithSuite(h7)
-  if btr > best_rank:
-   best_rank = btr
-   winner_list = [mym]
-  elif btr == best_rank:
-   winner_list.append(mym)
+   #mym = pu.TwoCardsTo2Meaning(card1, card2)
+   mym = pu.FlopToMeaning([card1, card2], flopCommunalStr, suitDict)
  
- #JUSTATEMP START
- if gaga:
-     if "s3A" not in winner_list:
-         print(pu.TotalRankToHandAndRank(best_rank))
-         for cc in s:
-             print(du.DisplayCardStr(cc), " ", end='')
-         print()
- #JUSTATEMP END
- winReward = 1. / len(winner_list)
- for mym in winner_list:
-  d[mym] += winReward
-  handd[mym][pu.TotalRankToHandRank(best_rank)] += winReward
-
-
+   totald[mym] += 1
+   h7 = [card1, card2] + s[-5:]
+   btr = pf.Process7CardsWithSuite(h7)
+   if btr > best_rank:
+    best_rank = btr
+    winner_list = [mym]
+   elif btr == best_rank:
+    winner_list.append(mym)
+  
+  winReward = 1. / len(winner_list)
+  for mym in winner_list:
+   d[mym] += winReward
+   handd[mym][pu.TotalRankToHandRank(best_rank)] += winReward
+ 
+RunMainLoop(10000000)
+print(len(totald))
+print(len(d))
+print(len(handd))
+sys.exit()
+ 
 def DisplayByProbWithHands(d, totald, handd, cutoff=True):
  outd = {}
  for k,v in totald.items():
