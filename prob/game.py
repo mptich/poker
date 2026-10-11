@@ -2,6 +2,7 @@ import sys
 import random
 import collections
 from tqdm import tqdm
+import dill
 
 from values import Values
 import disputils as du
@@ -48,10 +49,13 @@ def RunMainLoop(count):
    d[mym] += winReward
    handd[mym][pu.TotalRankToHandRank(best_rank)] += winReward
  
-RunMainLoop(10000000)
-print(len(totald))
-print(len(d))
-print(len(handd))
+RunMainLoop(1000000)
+with open("totald_" + sys.argv[1] + ".pkl", "wb") as fout:
+    dill.dump(totald, fout)
+with open("d_" + sys.argv[1] + ".pkl", "wb") as fout:
+    dill.dump(d, fout)
+with open("handd_" + sys.argv[1] + ".pkl", "wb") as fout:
+    dill.dump(handd, fout)
 sys.exit()
  
 def DisplayByProbWithHands(d, totald, handd, cutoff=True):
